@@ -29,6 +29,8 @@ public sealed class RuntimeStateService
     public string InstallDirectory { get; }
     public string InstallManifestPath => Path.Combine(InstallDirectory, "install.json");
     public string ChatGptConnectionPath => Path.Combine(InstallDirectory, "chatgpt-connection.json");
+    public string PublicConnectionPath => Path.Combine(InstallDirectory, "public-connection.json");
+    public string SecretsDirectory => Path.Combine(InstallDirectory, "secrets");
     public string ScriptsDirectory => Path.Combine(InstallDirectory, "scripts");
     public string StartChatGptScript => Path.Combine(ScriptsDirectory, "Start-RuntimeForChatGPT.ps1");
     public string StopChatGptScript => Path.Combine(ScriptsDirectory, "Stop-RuntimeForChatGPT.ps1");
@@ -65,9 +67,22 @@ public sealed class RuntimeStateService
         var chatGpt = await ReadJsonAsync(ChatGptConnectionPath, cancellationToken);
         var chatGptConfigured = chatGpt is not null;
         var chatGptAppName = ReadString(chatGpt, "app_name");
-        var chatGptTransport = ReadString(chatGpt, "transport");
-        var chatGptTunnel = ReadString(chatGpt, "tunnel_name");
+        var chatGptEndpoint = ReadString(chatGpt, "endpoint");
         var chatGptStatus = ReadString(chatGpt, "status");
+
+        var publicConnection = await ReadJsonAsync(PublicConnectionPath, cancellationToken);
+        var publicLocalMcpUrl = ReadString(publicConnection, "local_mcp_url");
+        var publicMcpUrl = ReadString(publicConnection, "public_mcp_url");
+        var cloudflareTunnelName = ReadString(publicConnection, "cloudflare_tunnel_name");
+        var cloudflareTunnelId = ReadString(publicConnection, "cloudflare_tunnel_id");
+        var cloudflareStatus = ReadString(publicConnection, "status");
+        var authMode = ReadString(publicConnection, "auth_mode");
+        var runtimeAuthCredentialsImported =
+            File.Exists(Path.Combine(SecretsDirectory, "auth-token.dpapi")) &&
+            File.Exists(Path.Combine(SecretsDirectory, "oauth-password.dpapi")) &&
+            File.Exists(Path.Combine(SecretsDirectory, "oauth-token-secret.dpapi"));
+        var runtimeTunnelTokenConfigured = File.Exists(Path.Combine(SecretsDirectory, "cloudflared-token.dpapi"));
+        var importedAgentDockTunnelTokenAvailable = File.Exists(Path.Combine(SecretsDirectory, "imported-agentdock-cloudflared-token.dpapi"));
 
         var codexAvailable = FindExecutable("codex-acp.cmd", "codex-acp.exe", "codex.cmd", "codex.exe") is not null ||
                              File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "node_modules", "@agentclientprotocol", "codex-acp", "dist", "index.js"));
@@ -90,9 +105,17 @@ public sealed class RuntimeStateService
             nativeHostRegistered,
             chatGptConfigured,
             chatGptAppName,
-            chatGptTransport,
-            chatGptTunnel,
+            chatGptEndpoint,
             chatGptStatus,
+            publicLocalMcpUrl,
+            publicMcpUrl,
+            cloudflareTunnelName,
+            cloudflareTunnelId,
+            cloudflareStatus,
+            authMode,
+            runtimeAuthCredentialsImported,
+            runtimeTunnelTokenConfigured,
+            importedAgentDockTunnelTokenAvailable,
             IsAnyProcessRunning("agentdock", "agentdock-tray"),
             codexAvailable,
             claudeAvailable,

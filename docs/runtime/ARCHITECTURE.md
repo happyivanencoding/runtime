@@ -116,9 +116,26 @@ reusing its state; this phase neither migrates nor replaces the live installatio
 ## Installed phase-two development path
 
 `%LOCALAPPDATA%/RuntimeCore` is an independent native installation. The existing
-AgentDock Dynamic MCP `runtime-core-preview` invokes its stdio binary with the
-existing independent state home and ACP=false. This forwarding path is an
-incremental deployment choice, not a second Task/Project system or a permanent
-dependency on upstream AgentDock. A standalone MCP connection is supported by
-the same binary; new public HTTPS/tunnel/auth configuration is not provisioned
-by the local installer. See INSTALL.md.
+AgentDock Dynamic MCP `runtime-core-preview` invokes Runtime's stdio binary with the
+existing independent state home and ACP=false. This remains a fallback path, not a
+second Task/Project system or a permanent dependency on upstream AgentDock.
+
+The production ChatGPT-facing edge is fixed as:
+
+```text
+ChatGPT Web
+  -> https://runtime.thegreatnovel.com/mcp
+  -> Runtime-owned Cloudflare named Tunnel
+  -> http://127.0.0.1:8767/mcp
+  -> Runtime Core
+```
+
+Runtime keeps stdio and loopback HTTP as transports over the same tool registry and
+handlers. Public-edge state is split deliberately: `%LOCALAPPDATA%/RuntimeCore/public-connection.json`
+contains only non-secret endpoint/tunnel status, `chatgpt-connection.json` contains only
+non-secret ChatGPT App binding state, and `%LOCALAPPDATA%/RuntimeCore/secrets` contains
+CurrentUser-DPAPI protected credentials. AgentDock credentials may be imported and
+re-encrypted into the Runtime store; its Cloudflare tunnel token is reference-only because
+that token is tunnel-specific. Runtime's active Cloudflare token must belong to a separate
+Runtime tunnel. OpenAI Secure MCP Tunnel is not part of this architecture unless the user
+explicitly changes the decision later. See INSTALL.md and PUBLIC_MCP.md.

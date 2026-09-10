@@ -33,7 +33,19 @@ if ($source -ine $target) {
     if (Test-Path -LiteralPath $target) { Copy-Item -LiteralPath $target -Destination (Join-Path $InstallDir 'bin\runtime-core.previous.exe') -Force }
     Copy-Item -LiteralPath $source -Destination $target -Force
 }
-foreach ($name in @('Start-RuntimeCore.ps1', 'Install-LanguageServers.ps1')) {
+foreach ($name in @(
+    'Start-RuntimeCore.ps1',
+    'Install-LanguageServers.ps1',
+    'Import-AgentDockCredentials.ps1',
+    'Initialize-RuntimePublicConnection.ps1',
+    'Set-RuntimeCloudflareToken.ps1',
+    'Set-RuntimePublicTunnelState.ps1',
+    'Run-RuntimePublic.ps1',
+    'Run-RuntimeCloudflared.ps1',
+    'Start-RuntimeForChatGPT.ps1',
+    'Stop-RuntimeForChatGPT.ps1',
+    'Status-RuntimeForChatGPT.ps1'
+)) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $InstallDir 'scripts') -Force
 }
 $sourceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))

@@ -27,6 +27,13 @@ This is an independently maintained AI Computer Runtime, based on AgentDock.
   Test built binaries with a separate state directory and ACP disabled.
 - Read docs/runtime/ARCHITECTURE.md and docs/runtime/UPSTREAM.md before changing
   domain ownership. Project OS owns assignment/review; Runtime owns execution.
+- Read docs/runtime/PUBLIC_MCP.md before changing ChatGPT/public transport. The
+  fixed production edge is `https://runtime.thegreatnovel.com/mcp` -> an independent
+  Runtime Cloudflare named Tunnel -> `http://127.0.0.1:8767/mcp`. Do not replace it
+  with OpenAI Secure MCP Tunnel unless the user explicitly changes that decision.
+- AgentDock and Runtime must not share a production hostname or active Cloudflare
+  tunnel token. AgentDock DPAPI auth credentials may be imported and re-encrypted
+  into Runtime to avoid user re-entry; the AgentDock tunnel token remains reference-only.
 
 ## Native LSP / Desktop
 

@@ -159,7 +159,9 @@ public partial class MainWindow : Window
 
         McpDot.Fill = runtimeUsable ? Success : Danger;
         McpStatusText.Text = runtimeUsable ? "本地可用" : "不可用";
-        McpDetailText.Text = runtimeUsable ? "stdio · direct profile ready" : "runtime-core.exe missing";
+        McpDetailText.Text = runtimeUsable
+            ? JoinNonEmpty(" · ", "stdio", state.PublicLocalMcpUrl)
+            : "runtime-core.exe missing";
         McpCommandTextBox.Text = $"\"{state.BinaryPath}\" --stdio";
 
         BrowserDot.Fill = state.BridgeConnected ? Success : Warning;
@@ -180,17 +182,25 @@ public partial class MainWindow : Window
         ChatGptDot.Fill = state.ChatGptConfigured ? ParseConnectionBrush(state.ChatGptStatus) : Warning;
         ChatGptStatusText.Text = state.ChatGptConfigured ? FriendlyConnectionStatus(state.ChatGptStatus) : "未配置";
         ChatGptDetailText.Text = state.ChatGptConfigured
-            ? JoinNonEmpty(" · ", state.ChatGptAppName, state.ChatGptTransport, state.ChatGptTunnel)
-            : "等待 ChatGPT Direct MCP";
-        ChatGptConnectionSummary.Text = state.ChatGptConfigured
-            ? $"{FriendlyConnectionStatus(state.ChatGptStatus)} · {state.ChatGptTransport}"
-            : "尚未配置 ChatGPT 直接 MCP";
+            ? JoinNonEmpty(" · ", state.ChatGptAppName, state.ChatGptEndpoint)
+            : ValueOrDash(state.PublicMcpUrl);
+        ChatGptConnectionSummary.Text = string.IsNullOrWhiteSpace(state.PublicMcpUrl)
+            ? "固定目标：runtime.thegreatnovel.com/mcp → Cloudflare Tunnel → Runtime"
+            : $"{FriendlyConnectionStatus(state.CloudflareStatus)} · {state.PublicMcpUrl}";
         ChatGptAppNameText.Text = ValueOrDash(state.ChatGptAppName);
-        ChatGptTransportText.Text = ValueOrDash(state.ChatGptTransport);
-        ChatGptTunnelText.Text = ValueOrDash(state.ChatGptTunnel);
-        ChatGptBadge.Background = new SolidColorBrush(ColorFromHex(state.ChatGptConfigured ? "#123026" : "#2A2312"));
-        ChatGptBadgeText.Text = state.ChatGptConfigured ? FriendlyConnectionStatus(state.ChatGptStatus).ToUpperInvariant() : "NOT CONFIGURED";
-        ChatGptBadgeText.Foreground = state.ChatGptConfigured ? Success : Warning;
+        ChatGptTransportText.Text = ValueOrDash(state.PublicMcpUrl);
+        LocalPublicMcpText.Text = ValueOrDash(state.PublicLocalMcpUrl);
+        CloudflareTunnelText.Text = JoinNonEmpty(" · ", ValueOrDash(state.CloudflareTunnelName), ValueOrDash(state.CloudflareTunnelId));
+        AuthStatusText.Text = $"{ValueOrDash(state.AuthMode)} · {(state.RuntimeAuthCredentialsImported ? "credentials ready" : "credentials missing")} · {(state.RuntimeTunnelTokenConfigured ? "Runtime tunnel token ready" : state.ImportedAgentDockTunnelTokenAvailable ? "AgentDock tunnel token imported as reference only" : "Runtime tunnel token pending")}";
+        ChatGptEndpointText.Text = state.ChatGptConfigured
+            ? JoinNonEmpty(" · ", FriendlyConnectionStatus(state.ChatGptStatus), state.ChatGptEndpoint)
+            : "未绑定 ChatGPT App";
+        var cloudflareReady = state.CloudflareStatus.Trim().ToLowerInvariant() is "connected" or "healthy" or "ready" or "pass";
+        ChatGptBadge.Background = new SolidColorBrush(ColorFromHex(cloudflareReady && state.ChatGptConfigured ? "#123026" : "#2A2312"));
+        ChatGptBadgeText.Text = cloudflareReady
+            ? state.ChatGptConfigured ? FriendlyConnectionStatus(state.ChatGptStatus).ToUpperInvariant() : "APP PENDING"
+            : state.RuntimeTunnelTokenConfigured ? "TUNNEL OFFLINE" : "TUNNEL PENDING";
+        ChatGptBadgeText.Foreground = cloudflareReady && state.ChatGptConfigured ? Success : Warning;
 
         AgentDockDot.Fill = state.AgentDockRunning ? Success : Muted;
         AgentDockStatusText.Text = state.AgentDockRunning ? "Available" : "未运行";
@@ -213,11 +223,11 @@ public partial class MainWindow : Window
         ComputerPermissionBadge.Background = new SolidColorBrush(ColorFromHex(state.IsElevated ? "#2A2312" : "#113025"));
 
         StartupCheckBox.IsChecked = state.StartupEnabled;
-        StartChatGptButton.IsEnabled = File.Exists(_service.StartChatGptScript);
+        StartChatGptButton.IsEnabled = File.Exists(_service.StartChatGptScript) && state.RuntimeAuthCredentialsImported && state.RuntimeTunnelTokenConfigured;
         StopChatGptButton.IsEnabled = File.Exists(_service.StopChatGptScript);
-        ConnectionActionText.Text = state.ChatGptConfigured
-            ? "连接控制由本机脚本执行；按钮不会显示或输出 tunnel secret。"
-            : "连接脚本将在 Codex 完成 ChatGPT 配置后自动接入这里。";
+        ConnectionActionText.Text = state.RuntimeTunnelTokenConfigured
+            ? "公网链路由 Runtime 独立 Cloudflare Tunnel 管理；客户端不会显示或输出任何 secret。"
+            : "认证凭据可从 AgentDock 自动迁移；独立 Runtime Cloudflare Tunnel token 仍需为 Runtime tunnel 单独生成。";
 
         _trayIcon.Text = runtimeActive
             ? state.BridgeConnected ? "Runtime · Core + Chrome Bridge" : "Runtime · Core active"
@@ -340,7 +350,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            StartChatGptButton.IsEnabled = File.Exists(_service.StartChatGptScript);
+            StartChatGptButton.IsEnabled = File.Exists(_service.StartChatGptScript) && _state?.RuntimeAuthCredentialsImported == true && _state.RuntimeTunnelTokenConfigured;
             StopChatGptButton.IsEnabled = File.Exists(_service.StopChatGptScript);
         }
     }
@@ -387,6 +397,8 @@ public partial class MainWindow : Window
             "healthy" => "Healthy",
             "ready" => "Ready",
             "pass" => "Ready",
+            "tunnel_pending" => "Tunnel pending",
+            "offline" => "Offline",
             "stopped" => "Paused",
             "blocked" => "Blocked",
             "failed" => "Failed",

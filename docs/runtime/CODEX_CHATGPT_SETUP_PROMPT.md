@@ -7,6 +7,22 @@
 
 这不是“写教程”的任务。能安全自动完成的步骤直接完成；只有登录、2FA、重新授权、安全确认这类必须由本人操作的步骤才暂停让我接手。
 
+本项目的公网 MCP 架构已经由用户永久确定，不再比较或迁移到 OpenAI Secure MCP Tunnel：
+
+ChatGPT Web
+  → https://runtime.thegreatnovel.com/mcp
+  → Runtime 独立 Cloudflare named Tunnel
+  → http://127.0.0.1:8767/mcp
+  → Runtime Core
+
+除非用户未来明确改变这一架构，否则：
+- 不使用 OpenAI Secure MCP Tunnel
+- 不建议 OpenAI Secure MCP Tunnel
+- 不把它作为 fallback
+- 不为了“更官方”而替换 Cloudflare
+- AgentDock 的 https://agent.thegreatnovel.com/mcp 与 Runtime 必须是两个独立公网入口、两个独立 Cloudflare Tunnel
+- Runtime 可以迁移 AgentDock 现有 Bearer/OAuth 凭据以免用户重新查找输入，但不能把 AgentDock 的 tunnel-specific Cloudflare token 当成 Runtime 独立 tunnel 的 active token
+
 ====================
 0. 权威现状：先核验，不要重建
 ====================
@@ -80,6 +96,13 @@ runtime-core-preview
 不要删除。
 不要修改官方 AgentDock。
 
+本机在 2026-09-10 已完成的公网前置状态，先核验后继续：
+- `%LOCALAPPDATA%\RuntimeCore\public-connection.json` 已初始化为 `runtime.thegreatnovel.com` / loopback 8767
+- AgentDock 的 Bearer Token、OAuth 密码、OAuth signing secret 已通过 DPAPI 迁移到 Runtime 自己的 `secrets` 目录
+- AgentDock Cloudflare tunnel token 只迁移了 reference-only 副本，没有激活
+- `%LOCALAPPDATA%\RuntimeCore\bin\cloudflared.exe` 已有独立副本
+- Runtime 自己的独立 Cloudflare tunnel 尚未完成时，`secrets\cloudflared-token.dpapi` 应不存在，状态应是 `tunnel_pending`
+
 ====================
 1. 最重要的 ACP 约束
 ====================
@@ -116,7 +139,7 @@ acp_status
 先阅读当前 OpenAI 官方文档：
 - Developer mode and MCP apps in ChatGPT
 - Apps in ChatGPT
-- Secure MCP Tunnel 相关官方文档
+- ChatGPT custom MCP app / connector 对 HTTPS MCP endpoint 的当前要求
 - 如有新的 Plugins / Apps / Custom MCP 文档，以最新官方版本为准
 
 然后用当前已经登录的 ChatGPT 网页版实际检查。
@@ -129,7 +152,7 @@ acp_status
 - Create custom MCP app / connector
 - Plugins / Custom Apps 的当前入口
 - Action controls / confirmation controls
-- Secure MCP Tunnel 的当前接入流程
+- 是否允许直接填写 https://runtime.thegreatnovel.com/mcp 作为自定义 MCP endpoint
 
 记录当前账户真实能力：
 1. 能不能创建 custom app / MCP connector
@@ -140,7 +163,7 @@ acp_status
 6. custom app 在普通 Chat / Work / Agent mode / Deep Research 的当前限制
 
 截至任务启动前的官方文档可能仍显示：
-- 本地 MCP 不能被 ChatGPT Web 直接连接，应通过 Secure MCP Tunnel 等官方私有连接方式
+- ChatGPT Web 需要可达的 HTTPS MCP endpoint；本项目固定使用 runtime.thegreatnovel.com 经 Cloudflare Tunnel 提供该 endpoint
 - Full MCP write/modify 的套餐范围可能与 read/fetch 不同
 
 但最终必须以“本次执行时最新官方文档 + 当前账号实际 UI”为准。
@@ -155,94 +178,114 @@ acp_status
 - 明确报告哪些能力被 ChatGPT 产品权限阻塞
 
 ====================
-3. 优先目标架构
+3. 固定目标架构
 ====================
 
-目标优先级：
+唯一目标：
 
-A. 首选：
 ChatGPT Web
   → Runtime custom app / MCP
-  → OpenAI 官方 Secure MCP Tunnel（如果当前官方仍是推荐方案）
-  → 本机 Runtime
+  → https://runtime.thegreatnovel.com/mcp
+  → Runtime 独立 Cloudflare named Tunnel
+  → http://127.0.0.1:8767/mcp
+  → Runtime Core
 
-B. fallback：
+fallback 继续保留：
 ChatGPT
   → AgentDock
   → runtime-core-preview
   → Runtime
 
-不要删除 B，直到 A 经过真实 E2E 验收。
+Runtime 与 AgentDock 必须使用不同 hostname 和不同 Cloudflare Tunnel。不要把 agent.thegreatnovel.com 改指 Runtime，也不要让 Runtime 复用 AgentDock tunnel 作为生产入口。
 
-禁止为了省事直接把 Runtime 裸露成：
-- 0.0.0.0 MCP
-- 无认证 HTTP MCP
+禁止：
+- OpenAI Secure MCP Tunnel
+- 0.0.0.0 裸 MCP
+- 无认证公网 HTTP MCP
 - 路由器端口映射
-- 随机 ngrok 公网地址
-- 任意公共临时 tunnel
-
-AgentDock 当前已有自己的公网/Cloudflare 配置，也不要直接复用它的 token、OAuth 密钥或公网地址作为 Runtime 的凭据。
+- ngrok/trycloudflare 作为正式入口
+- 把 AgentDock 的 tunnel token 直接当作 Runtime 独立 tunnel token
 
 ====================
 4. Runtime transport
 ====================
 
-保留当前 stdio。
+保留 stdio，供本机和 AgentDock fallback 使用。
 
-ChatGPT Web 无法直接使用 localhost/stdio 时，按当前 OpenAI Secure MCP Tunnel 官方实现接入。
-
-不要猜 tunnel client 的命令行参数。
-先查最新官方文档。
-
-如果官方 tunnel 可以直接桥接 stdio：
-使用官方方式，不加第二套 transport。
-
-如果当前官方 tunnel 明确要求本地 Streamable HTTP：
-才给 Runtime 增加 loopback-only transport：
-127.0.0.1:<port>/mcp
+为固定公网入口启用 Runtime 已支持的 loopback HTTP transport：
+http://127.0.0.1:8767/mcp
 
 要求：
 - bind 只能 127.0.0.1
-- 禁止 0.0.0.0
-- stdio 继续保留
-- HTTP 与 stdio 共用同一 tool registry / schema / handler
+- 公网只能通过 Cloudflare Tunnel 进入
+- stdio 与 HTTP 共用同一 tool registry / schema / handlers
 - 不复制业务逻辑
-- 正确实现当前 MCP initialization/session
 - health endpoint 不暴露 secrets
-- graceful shutdown
-- automated tests
+- ACP 默认仍为 false/dormant
 
-如果修改 Runtime 代码：
-- 正确测试
-- commit
-- push main 到 https://github.com/happyivanencoding/runtime
+初始化非敏感公网配置：
+%LOCALAPPDATA%\RuntimeCore\scripts\Initialize-RuntimePublicConnection.ps1
+
+该脚本应生成：
+%LOCALAPPDATA%\RuntimeCore\public-connection.json
+
+其中固定：
+- local_mcp_url = http://127.0.0.1:8767/mcp
+- public_mcp_url = https://runtime.thegreatnovel.com/mcp
+- architecture = public_https_cloudflare_named_tunnel
 
 ====================
-5. Secure MCP Tunnel / 私有连接
+5. Cloudflare Tunnel + 凭据迁移
 ====================
 
-使用当前 OpenAI 官方支持的私有连接方式。
+先运行：
+%LOCALAPPDATA%\RuntimeCore\scripts\Import-AgentDockCredentials.ps1
 
-凭据要求：
-- 不写入 Git
-- 不写 README
-- 不写 source code
-- 不写 .env.example
-- 不写 Runtime Control 状态文件
-- 不打印到普通日志
-- 不显示在最终回复
+它会从当前用户的：
+%LOCALAPPDATA%\AgentDock
+读取已有 DPAPI 凭据，在内存中解密后以 Runtime 自己的 DPAPI entropy 重新加密到：
+%LOCALAPPDATA%\RuntimeCore\secrets
 
-优先使用官方 credential store / Windows Credential Manager / ACL 受限的用户配置。
+允许自动迁移：
+- Bearer Token
+- OAuth 密码
+- OAuth signing/token secret
+- AgentDock Cloudflare tunnel token 的 reference-only 副本
 
-不要关闭 Windows Defender。
-不要关闭 UAC。
-不要全局降低 PowerShell ExecutionPolicy。
-不要默认以 Administrator 启动 Runtime。
-不要给 Runtime SYSTEM 权限。
+重要：AgentDock 的 Cloudflare tunnel token 是 tunnel-specific。它可以安全导入作为参考，但绝对不能写成 Runtime active cloudflared-token.dpapi，也不能用于启动 Runtime 正式 tunnel，否则 Runtime 就不是独立 tunnel。
 
-Windows Firewall：
-- 私有 tunnel 应 outbound-only
-- 如果新增 loopback MCP，不创建公网 inbound rule
+为 Runtime 新建一个独立 Cloudflare named Tunnel，名称优先：runtime。
+优先使用用户当前已登录的 Cloudflare Dashboard/浏览器会话创建，不要求用户手工查找或重新输入 AgentDock 的密码/token。
+
+Runtime 使用自己安装目录中的 cloudflared：
+%LOCALAPPDATA%\RuntimeCore\bin\cloudflared.exe
+如果不存在，可以从当前 AgentDock 安装复制同一 cloudflared.exe 后先验证 `--version`；不要让 Runtime 的长期运行直接依赖 AgentDock 安装目录中的二进制。
+
+创建后将 Runtime tunnel 的新 token 通过临时文件交给：
+%LOCALAPPDATA%\RuntimeCore\scripts\Set-RuntimeCloudflareToken.ps1
+
+并用：
+%LOCALAPPDATA%\RuntimeCore\scripts\Set-RuntimePublicTunnelState.ps1 -TunnelId <Runtime tunnel id> -TunnelName runtime -Status configured
+写入非敏感 tunnel ID/状态，供 Runtime Control 展示。
+
+该脚本只把新 token 以 CurrentUser DPAPI 保存为：
+%LOCALAPPDATA%\RuntimeCore\secrets\cloudflared-token.dpapi
+
+不得把 token 输出到终端、聊天、日志或 Git。临时明文文件保存成功后立即删除。
+
+Cloudflare 配置必须把：
+runtime.thegreatnovel.com
+路由到：
+http://127.0.0.1:8767
+
+认证继续由 Runtime 自己的 Bearer/OAuth 层负责；Cloudflare Tunnel 不是应用认证的替代品。
+
+安全要求：
+- secrets 不写 Git/README/.env.example/普通日志
+- 不显示在 Runtime Control
+- 不关闭 Defender/UAC
+- 不默认管理员权限
+- Cloudflare tunnel 仅 outbound connection，不增加公网 inbound firewall rule
 
 ====================
 6. ChatGPT 网页版配置
@@ -253,9 +296,10 @@ Windows Firewall：
 1. 启用 Developer mode / Custom App 能力
 2. 创建私人 Runtime App
 3. 名称优先：
-   Runtime Local
+   Runtime
 4. 不发布到公共 Plugin Directory
-5. 连接到 Runtime 的私有 MCP transport
+5. MCP endpoint 固定填写：
+   https://runtime.thegreatnovel.com/mcp
 6. 扫描/刷新 Runtime tools
 
 重点检查：
@@ -300,9 +344,9 @@ Runtime Control 已经实现读取以下“非敏感状态文件”：
 配置完成后写入类似：
 
 {
-  "app_name": "Runtime Local",
-  "transport": "Secure MCP Tunnel",
-  "tunnel_name": "Runtime Local",
+  "app_name": "Runtime",
+  "transport": "Cloudflare HTTPS MCP",
+  "endpoint": "https://runtime.thegreatnovel.com/mcp",
   "status": "connected",
   "last_verified_at": "<ISO-8601>"
 }
@@ -334,14 +378,14 @@ Runtime Control 还会寻找：
 %LOCALAPPDATA%\RuntimeCore\scripts\Stop-RuntimeForChatGPT.ps1
 %LOCALAPPDATA%\RuntimeCore\scripts\Status-RuntimeForChatGPT.ps1
 
-如果直接连接可以正式启用，请创建这三个脚本。
+这三个脚本已经由 Runtime 实现并安装；先验证现有实现，不要重新写第二套 lifecycle。Runtime 独立 tunnel token 未配置时，Start 必须保持不可用/明确失败，不能退回去使用 AgentDock tunnel token。
 
 要求：
 - idempotent
 - 普通用户权限运行
 - 不弹持续黑窗口
 - 不输出 secrets
-- 只有一个 tunnel/connector owner
+- Runtime 的 HTTP MCP 与独立 cloudflared 各自只能有一个 owner
 - 不启动第二个重复 Runtime 实例
 - Start：恢复 ChatGPT → Runtime 链路
 - Stop：明确 kill switch，只停 ChatGPT → Runtime 远程链路
@@ -351,8 +395,8 @@ Runtime Control 还会寻找：
 - Stop 不应破坏 runtime-core-preview fallback
 - Status：只读状态，不启动 ACP、不修改系统
 
-如果直接连接被产品权限 BLOCKED：
-不要伪造 Start/Stop 能力；可以不创建 Start/Stop，或仅创建明确返回 BLOCKED 的安全脚本。
+如果 ChatGPT 产品权限 BLOCKED：
+保留现有 Cloudflare/Runtime lifecycle 代码，但不要伪造 ChatGPT App 已连接；`chatgpt-connection.json` 标记 blocked，AgentDock fallback 继续可用。
 
 ====================
 8. Chrome Bridge 本机检查
@@ -428,11 +472,9 @@ CSS selector 不得自动转换为屏幕坐标乱点。
 在 E2E 全部通过后再设置自动恢复。
 
 目标：
-用户登录 Windows 后，Runtime Direct MCP 私有连接可自动恢复，不需要常驻可见 PowerShell 窗口。
+用户登录 Windows 后，Runtime HTTP MCP + Runtime 独立 cloudflared named tunnel 可自动恢复，不需要常驻可见 PowerShell 窗口。
 
-优先使用 OpenAI Tunnel Client 官方 autostart / service 机制。
-如果官方没有：
-使用普通用户级 Scheduled Task 或 Startup 入口。
+优先使用普通用户级 Scheduled Task 或 Startup 入口分别管理 Runtime HTTP MCP 与 cloudflared；不要依赖 OpenAI Tunnel Client。两个进程都必须有单实例/幂等保护。
 
 要求：
 - 不要管理员权限
@@ -460,7 +502,7 @@ A. Runtime Control
 - ChatGPT 状态与实际连接一致
 
 B. ChatGPT Web
-- 在官方允许 custom app 的聊天模式中选择 Runtime Local
+- 在官方允许 custom app 的聊天模式中选择 Runtime
 - 从真正 ChatGPT 网页调用 Runtime status
 
 C. Browser
@@ -502,8 +544,8 @@ G. ACP dormant
 H. Chrome restart/reconnect
 检查 Native Messaging 可恢复。
 
-I. Tunnel restart/reconnect
-检查 direct connection 可恢复。
+I. Cloudflare Tunnel restart/reconnect
+重启 Runtime 独立 cloudflared，确认 https://runtime.thegreatnovel.com/mcp 恢复，并确认没有影响 agent.thegreatnovel.com。
 
 J. AgentDock fallback
 确认 runtime-core-preview 仍在并可用。
@@ -547,7 +589,7 @@ Runtime Control 的“启动连接 / 暂停远程控制”按钮必须调用前�
 ChatGPT Developer Mode      PASS / BLOCKED
 Custom Runtime App          PASS / BLOCKED
 Full MCP write/modify       PASS / BLOCKED
-Private/Secure MCP transport PASS / BLOCKED
+Cloudflare Public MCP       PASS / BLOCKED
 Runtime Control             PASS
 Runtime MCP                 PASS
 Chrome Bridge               PASS
@@ -567,7 +609,7 @@ AgentDock fallback          PASS
 3. 重启电脑后是否自动恢复
 4. 本机查看状态的方法
 5. 一键暂停 ChatGPT → Runtime 的方法
-6. tunnel 名称/ID（不能显示 secret）
+6. Runtime 独立 Cloudflare tunnel 名称/ID（不能显示 secret）
 7. 若改代码，最终 commit SHA
 8. 是否 push 成功
 9. 所有产品/套餐限制

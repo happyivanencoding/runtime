@@ -253,8 +253,8 @@
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                       <StackPanel>
-                        <TextBlock Text="ChatGPT Direct MCP" FontSize="17" FontWeight="SemiBold" />
-                        <TextBlock x:Name="ChatGptConnectionSummary" Text="尚未配置直接连接" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
+                        <TextBlock Text="Runtime Public MCP" FontSize="17" FontWeight="SemiBold" />
+                        <TextBlock x:Name="ChatGptConnectionSummary" Text="runtime.thegreatnovel.com → Cloudflare Tunnel → Runtime" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
                       </StackPanel>
                       <Border Grid.Column="1" x:Name="ChatGptBadge" Background="#2A2312" CornerRadius="10" Padding="12,7" VerticalAlignment="Center">
                         <TextBlock x:Name="ChatGptBadgeText" Text="NOT CONFIGURED" Foreground="{StaticResource WarningBrush}" FontSize="11" FontWeight="SemiBold" />
@@ -263,20 +263,29 @@
                     <Separator Margin="0,16" Background="{StaticResource BorderBrush}" />
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="145"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                      </Grid.RowDefinitions>
                       <TextBlock Text="App 名称" Style="{StaticResource MutedText}" Margin="0,0,0,10"/>
                       <TextBlock x:Name="ChatGptAppNameText" Grid.Column="1" Text="—" Margin="0,0,0,10"/>
-                      <TextBlock Grid.Row="1" Text="Transport" Style="{StaticResource MutedText}" Margin="0,0,0,10"/>
+                      <TextBlock Grid.Row="1" Text="公网 MCP" Style="{StaticResource MutedText}" Margin="0,0,0,10"/>
                       <TextBlock x:Name="ChatGptTransportText" Grid.Row="1" Grid.Column="1" Text="—" Margin="0,0,0,10"/>
-                      <TextBlock Grid.Row="2" Text="Tunnel" Style="{StaticResource MutedText}"/>
-                      <TextBlock x:Name="ChatGptTunnelText" Grid.Row="2" Grid.Column="1" Text="—"/>
+                      <TextBlock Grid.Row="2" Text="本地 MCP" Style="{StaticResource MutedText}" Margin="0,0,0,10"/>
+                      <TextBlock x:Name="LocalPublicMcpText" Grid.Row="2" Grid.Column="1" Text="—" Margin="0,0,0,10"/>
+                      <TextBlock Grid.Row="3" Text="Cloudflare Tunnel" Style="{StaticResource MutedText}" Margin="0,0,0,10"/>
+                      <TextBlock x:Name="CloudflareTunnelText" Grid.Row="3" Grid.Column="1" Text="—" Margin="0,0,0,10"/>
+                      <TextBlock Grid.Row="4" Text="认证" Style="{StaticResource MutedText}" Margin="0,0,0,10"/>
+                      <TextBlock x:Name="AuthStatusText" Grid.Row="4" Grid.Column="1" Text="—" Margin="0,0,0,10"/>
+                      <TextBlock Grid.Row="5" Text="ChatGPT App" Style="{StaticResource MutedText}"/>
+                      <TextBlock x:Name="ChatGptEndpointText" Grid.Row="5" Grid.Column="1" Text="—" TextWrapping="Wrap"/>
                     </Grid>
                     <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                       <Button x:Name="StartChatGptButton" Content="启动连接" Style="{StaticResource PrimaryButton}" Click="StartChatGpt_Click" Margin="0,0,8,0" />
                       <Button x:Name="StopChatGptButton" Content="暂停远程控制" Style="{StaticResource DangerButton}" Click="StopChatGpt_Click" Margin="0,0,8,0" />
                       <Button Content="打开连接配置" Style="{StaticResource GhostButton}" Click="OpenInstallDir_Click" />
                     </StackPanel>
-                    <TextBlock x:Name="ConnectionActionText" Text="连接脚本将在 Codex 完成 ChatGPT 配置后自动接入这里。" Style="{StaticResource MutedText}" Margin="0,10,0,0" TextWrapping="Wrap" />
+                    <TextBlock x:Name="ConnectionActionText" Text="固定架构：runtime.thegreatnovel.com/mcp → 独立 Cloudflare Tunnel → Runtime。" Style="{StaticResource MutedText}" Margin="0,10,0,0" TextWrapping="Wrap" />
                   </StackPanel>
                 </Border>
 

@@ -90,16 +90,20 @@ Windows 构建需要 .NET 8 SDK：
 不需要管理员权限，也不会默认加入开机启动。用户可在客户端“日志与设置”页自行开启
 “登录 Windows 后启动到托盘”。
 
-ChatGPT 直接连接配置完成后，客户端从下面的非敏感摘要读取状态：
+Runtime Control 把公网网络层与 ChatGPT App 层分开读取：
 
 ```text
+%LOCALAPPDATA%\RuntimeCore\public-connection.json
 %LOCALAPPDATA%\RuntimeCore\chatgpt-connection.json
+%LOCALAPPDATA%\RuntimeCore\secrets\*.dpapi
 ```
 
-其中只能存 app 名称、transport 名称、tunnel 名称/ID、connected/blocked 等非敏感字段；
-禁止存 token、cookie、OAuth secret、API key 或 authorization header。
+`public-connection.json` 只存本地/公网 MCP URL、Cloudflare tunnel 名称/ID、认证模式和状态；
+`chatgpt-connection.json` 只存 App 名称、HTTPS endpoint 和 ChatGPT 侧状态。所有 token、
+password、OAuth signing secret 只能存入 CurrentUser DPAPI secret store，不能进入上述 JSON、
+日志、Git 或 UI。
 
-客户端的 ChatGPT 启动/暂停按钮只在以下本地脚本真实存在时启用：
+Runtime 的固定公网 lifecycle 脚本随安装复制到本机；Runtime Control 根据凭据/Runtime tunnel token 是否就绪决定启动按钮是否可用：
 
 ```text
 %LOCALAPPDATA%\RuntimeCore\scripts\Start-RuntimeForChatGPT.ps1
@@ -107,9 +111,9 @@ ChatGPT 直接连接配置完成后，客户端从下面的非敏感摘要读取
 %LOCALAPPDATA%\RuntimeCore\scripts\Status-RuntimeForChatGPT.ps1
 ```
 
-这些脚本由正式 Direct MCP / Secure MCP Tunnel 配置步骤生成；`Stop` 必须只切断
-ChatGPT → Runtime 的直接远程控制链路，不得关闭 Chrome、删除 Runtime 数据或停止
-AgentDock fallback。
+这些脚本由 Runtime 固定公网 MCP 配置步骤生成；`Stop` 必须只切断
+`runtime.thegreatnovel.com/mcp` → Runtime 的独立 Cloudflare 公网链路，不得关闭 Chrome、
+删除 Runtime 数据或停止 AgentDock fallback。
 
 ## Dynamic MCP 本机注册值
 
@@ -191,18 +195,45 @@ session-0 Windows service，再期待它控制登录用户的应用；锁屏/UAC
 
 ## 建立独立 ChatGPT Runtime 连接
 
-ChatGPT Web 不能直接连接本机 `stdio` / `localhost` MCP。根据 2026-09-10 再次核对的
-OpenAI 官方帮助中心，开发机、本地网络或 on-prem MCP 应使用 **Secure MCP Tunnel**
-连接到受支持的 OpenAI 产品，而不是把本机执行端口直接暴露到公网。
+Runtime 的公网接入方案固定为：
 
-当前 ChatGPT 的入口以 **Apps / custom MCP app** 为主，Developer mode 的位置会按
-Business 与 Enterprise/Edu 工作区略有差异；应以当前 `Settings → Apps`、
-`Workspace settings → Apps`、`Permissions & Roles` 的实际 UI 和最新官方文档为准，
-不要继续照旧版 `Security and login → Plugins` 教程操作。
+```text
+ChatGPT Web
+  -> https://runtime.thegreatnovel.com/mcp
+  -> Runtime 独立 Cloudflare named Tunnel
+  -> http://127.0.0.1:8767/mcp
+  -> Runtime Core
+```
 
-完整 write/modify MCP 目前仍属于受套餐/工作区权限控制的 beta。连接前先确认当前
-账户是否真的允许 Runtime 的 click/type/file write/git/UIA 等 mutation；如果只允许
-read/fetch，保持 AgentDock fallback，不要把 mutation 伪装成 read-only 规避产品限制。
+除非用户以后明确改变架构，不使用 OpenAI Secure MCP Tunnel，也不把它作为建议或
+fallback。AgentDock 继续使用自己的 `agent.thegreatnovel.com` 与自己的 Cloudflare
+Tunnel；Runtime 必须使用不同 hostname、不同 tunnel 和不同 active tunnel token。
+
+先初始化非敏感网络配置并迁移现有认证凭据：
+
+```powershell
+& "$env:LOCALAPPDATA\RuntimeCore\scripts\Initialize-RuntimePublicConnection.ps1"
+& "$env:LOCALAPPDATA\RuntimeCore\scripts\Import-AgentDockCredentials.ps1"
+```
+
+迁移脚本会从 `%LOCALAPPDATA%\AgentDock` 读取当前 Windows 用户的 DPAPI 凭据，并用
+Runtime 自己的 entropy 重新加密到 `%LOCALAPPDATA%\RuntimeCore\secrets`。Bearer Token、
+OAuth 密码和 OAuth signing secret 可直接迁移，用户无需重新查找或输入。
+
+AgentDock 的 `cloudflared-token.dpapi` 也会导入一份 reference-only 副本，但不会作为
+Runtime 的 active tunnel token。Cloudflare tunnel token 是 tunnel-specific；直接复用会
+让 Runtime 接入 AgentDock 的 tunnel，违反“独立 Cloudflare Tunnel”的固定架构。
+Runtime 新 tunnel 建好后，用 `Set-RuntimeCloudflareToken.ps1 -TokenFile <临时文件>`
+安全写入 Runtime 自己的 DPAPI token，随后删除临时明文文件。
+
+`public-connection.json` 只存非敏感状态，包括本地/公网 MCP URL、Cloudflare tunnel
+名称/ID、认证模式与连接状态；`chatgpt-connection.json` 只存 ChatGPT App 名称、endpoint
+和状态。任何 token/password/cookie/API key 都只能进入 DPAPI secret store，不能进入
+上述 JSON、Git、日志或 Runtime Control UI。
+
+当前 ChatGPT 的入口以 Apps/custom MCP app 为主；实际 UI 与 write/modify 能力仍应按
+当前账户和最新产品状态核验。若账号限制 mutation，保持 AgentDock fallback，不伪装
+read-only，也不改变 Cloudflare 架构。
 
 本仓库提供给 Codex 的完整配置/验收提示词：
 
@@ -210,9 +241,7 @@ read/fetch，保持 AgentDock fallback，不要把 mutation 伪装成 read-only 
 docs/runtime/CODEX_CHATGPT_SETUP_PROMPT.md
 ```
 
-无论采用何种官方私有连接方式，都保留 `runtime-core-preview` 作为过渡 fallback，
-直到真实 ChatGPT Web E2E 通过。不要复用 AgentDock 的公网 token/OAuth secret，也不要
-从本文猜不存在的 tunnel ID。
+`runtime-core-preview` 在真实 Direct MCP E2E 通过前继续保留作为 fallback。
 
 ## 状态、产物与卸载边界
 
