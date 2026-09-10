@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package taskstate
 
 import (
@@ -89,6 +90,8 @@ type Event struct {
 }
 
 type Task struct {
+	// runtime-core: native Coding evidence shares this Task identity and store.
+	Coding                *CodingState           `json:"coding,omitempty"`
 	SchemaVersion         int                    `json:"schema_version"`
 	ID                    string                 `json:"id"`
 	Title                 string                 `json:"title"`

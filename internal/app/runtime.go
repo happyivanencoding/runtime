@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package app
 
 import (
@@ -11,10 +12,12 @@ import (
 	"time"
 
 	acpruntime "github.com/uvwt/agentdock/internal/acp"
+	"github.com/uvwt/agentdock/internal/coding"
 	"github.com/uvwt/agentdock/internal/config"
 	"github.com/uvwt/agentdock/internal/envstore"
 	"github.com/uvwt/agentdock/internal/evolution"
 	mcpclient "github.com/uvwt/agentdock/internal/mcp/client"
+	"github.com/uvwt/agentdock/internal/publicartifacts"
 	"github.com/uvwt/agentdock/internal/taskstate"
 	toolacp "github.com/uvwt/agentdock/internal/tool/acp"
 	toolbrowser "github.com/uvwt/agentdock/internal/tool/browser"
@@ -32,6 +35,8 @@ import (
 type Result = toolcore.Result
 
 type Runtime struct {
+	// runtime-core: Coding composes existing Tasks, sessions and Artifacts.
+	coding        *coding.Service
 	cfg           config.Config
 	ws            *workspace.Workspace
 	skills        *toolskill.Service
@@ -90,6 +95,11 @@ func NewRuntime(cfg config.Config) (*Runtime, error) {
 	runtime.recall = toolrecall.New(func() config.Config { return runtime.cfg })
 	runtime.evolution = evolution.New(func() config.Config { return runtime.cfg }, tasks)
 	runtime.taskTools = tooltask.New(func() config.Config { return runtime.cfg }, tasks, runtime.evolution)
+	runtime.coding, err = coding.New(cfg.AgentDockHome, tasks, runtime.command, publicartifacts.New(cfg.AgentDockHome, cfg.OAuthServerURL, cfg.Port))
+	if err != nil {
+		_ = runtime.Close()
+		return nil, err
+	}
 	if cfg.ACPEnabled {
 		acpEnvironment := make(map[string]string, len(cfg.ACPEnvFromEnv))
 		for childName, hostName := range cfg.ACPEnvFromEnv {
@@ -159,6 +169,9 @@ func (r *Runtime) Close() error {
 				closeErrors = append(closeErrors, err)
 			}
 		}
+		if r.coding != nil {
+			r.coding.WaitEvidence()
+		}
 		if r.mcpClients != nil {
 			if err := r.mcpClients.Close(); err != nil {
 				closeErrors = append(closeErrors, fmt.Errorf("close dynamic MCP clients: %w", err))
@@ -200,6 +213,9 @@ func (r *Runtime) Call(ctx context.Context, name string, args map[string]any) (R
 	}
 	if err := validateTopLevelArguments(spec, args); err != nil {
 		return nil, err
+	}
+	if _, scoped := args["task_id"]; scoped && codingContextTool(name) {
+		return r.callInCodingWorkspace(ctx, spec, args)
 	}
 	return spec.Handler(ctx, r, args)
 }

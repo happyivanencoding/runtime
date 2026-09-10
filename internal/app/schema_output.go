@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package app
 
 import (
@@ -6,6 +7,9 @@ import (
 )
 
 func OutputSchema(name string) map[string]any {
+	if schema, ok := codingOutputSchema(name); ok {
+		return schema
+	}
 	if name == mcpcontract.ToolAgentDockContext {
 		return mcpcontract.LocalAgentDockContextOutputSchema()
 	}

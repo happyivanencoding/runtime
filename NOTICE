@@ -1,0 +1,17 @@
+runtime-core (working name)
+
+This product is derived from AgentDock:
+https://github.com/uvwt/AgentDock
+Baseline: v0.8.1, commit f5661f06495b1fad59728983ce06eee2f554f29e.
+The upstream source is distributed under the Apache License, Version 2.0.
+Original license and copyright notices are retained in the source tree.
+
+Modifications for the independently maintained runtime-core fork:
+Copyright 2026 Jingxuan Li and runtime-core contributors.
+See Git history and docs/runtime/UPSTREAM.md for modification provenance.
+
+WebCodex is an architectural reference:
+https://github.com/yyjeqhc/webcodex
+Reference commit: 19778e39e49841b70374f4335568106123cdf05e.
+The initial Coding domain is a new Go implementation of the selected ideas,
+not a bundled WebCodex server or a copy of its Rust implementation.

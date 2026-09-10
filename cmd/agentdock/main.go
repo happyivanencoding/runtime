@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package main
 
 import (
@@ -22,7 +23,6 @@ import (
 	"github.com/uvwt/agentdock/internal/httpx"
 	"github.com/uvwt/agentdock/internal/mcp"
 	"github.com/uvwt/agentdock/internal/nexusbridge"
-	"github.com/uvwt/agentdock/internal/selfupdate"
 	skills "github.com/uvwt/agentdock/internal/skill"
 	skillbundle "github.com/uvwt/agentdock/internal/skill/bundle"
 	skillstate "github.com/uvwt/agentdock/internal/skill/state"
@@ -38,9 +38,7 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	if handled, err := selfupdate.HandleInternalCommand(ctx, args); handled {
-		return err
-	}
+	// runtime-core: official binary update helpers are not fork maintenance.
 	if len(args) == 1 && args[0] == "--version" {
 		printVersion(stdout)
 		return nil
@@ -57,18 +55,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if len(args) > 0 && args[0] == "update" {
-		switch {
-		case len(args) == 1:
-			return selfupdate.Run(ctx, stdout)
-		case len(args) == 2 && args[1] == "--check":
-			result, err := selfupdate.Check(ctx)
-			if err != nil {
-				return err
-			}
-			return json.NewEncoder(stdout).Encode(result)
-		default:
-			return errors.New("用法：agentdock update [--check]")
+		if len(args) == 1 || len(args) == 2 && args[1] == "--check" {
+			return errors.New("runtime-core does not use the official AgentDock binary updater; inspect upstream-agentdock commits and selectively port source changes")
 		}
+		return errors.New("用法：agentdock update [--check] (disabled for runtime-core)")
 	}
 	if len(args) > 0 && args[0] == "service" {
 		return runServiceCommand(ctx, args[1:], stdout, stderr)
@@ -254,7 +244,7 @@ func runServer(ctx context.Context, args []string, stderr io.Writer) error {
 		fmt.Fprintln(stderr, "  agentdock [服务参数]")
 		fmt.Fprintln(stderr, "  agentdock --version")
 		fmt.Fprintln(stderr, "  agentdock version [--json]")
-		fmt.Fprintln(stderr, "  agentdock update [--check]")
+		fmt.Fprintln(stderr, "  agentdock update [--check] (disabled in this fork; use source maintenance)")
 		fmt.Fprintln(stderr, "  agentdock service <status|start|stop|restart|autostart> --runtime-root <目录>")
 		fmt.Fprintln(stderr, "  agentdock tunnel <status|start|stop|restart|regenerate|configure|autostart> --runtime-root <目录>")
 		fmt.Fprintln(stderr, "  agentdock skill bootstrap --bundle <目录>")
@@ -296,11 +286,8 @@ func runServer(ctx context.Context, args []string, stderr io.Writer) error {
 		slog.Error("NexusDock device identity ignored", "error", identityErr)
 	}
 	logx.Setup(cfg.LogLevel)
-	if err := selfupdate.RepairDesktopRuntimeIfNeeded(ctx, stderr); err != nil {
-		// Windows v0.7.4 及更早版本只会替换 core。新版 core 启动时尝试补齐同版本控制面板，
-		// 失败不应阻断 MCP 服务启动；保留明确日志并在下次启动继续重试。
-		slog.Warn("desktop runtime repair skipped", "error", err)
-	}
+	// runtime-core: do not repair/replace an official desktop installation at startup.
+
 	slog.Info("server starting", "agentdock_home", cfg.AgentDockHome, "agentdock_default_dir", cfg.AgentDockDefaultDir, "path_model", config.PathModel, "host", cfg.Host, "port", cfg.Port, "stdio", cfg.Stdio, "log_level", cfg.LogLevel, "recall_enabled", cfg.NexusEndpoint != "", "nexus_enabled", cfg.NexusEndpoint != "", "browser_enabled", cfg.BrowserEnabled)
 	runtime, err := app.NewRuntime(cfg)
 	if err != nil {

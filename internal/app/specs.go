@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package app
 
 import (
@@ -147,7 +148,7 @@ func ctxToolHandler(fn func(*Runtime, context.Context, map[string]any) (Result, 
 }
 
 func allToolSpecs() []ToolSpec {
-	return bindToolSchemas([]ToolSpec{
+	return bindToolSchemas(append([]ToolSpec{
 		{Name: "agentdock_context", Title: "AgentDock context", Description: "Return structured AgentDock bootstrap context including available capabilities, integrations, rules, and high-priority context.", Handler: ctxToolHandler((*Runtime).agentDockContextTool)},
 		{Name: "read_file", Title: "Read file", Description: toolfile.ToolDescription("Read a UTF-8 text file slice. Supports normal Host paths and skill://<name>/<path> resources from the active Skill version."), Annotations: readOnlyToolAnnotations(false), Handler: ctxToolHandler((*Runtime).readFile)},
 		{Name: "list_dir", Title: "List directory", Description: toolfile.ToolDescription("List directory entries with explicit depth, glob filters, and entry-type filtering. Glob patterns are relative to path: * stays within one path segment and ** crosses directories. Relative paths resolve from ~/AgentDock; absolute and ~/ paths use Host rules."), Annotations: readOnlyToolAnnotations(false), Handler: ctxToolHandler((*Runtime).listDir)},
@@ -195,7 +196,7 @@ func allToolSpecs() []ToolSpec {
 		{Name: "file_publish", Title: "Publish signed file", Description: "Publish a local file or directory as an immutable Artifact snapshot under ~/.agentdock/public-artifacts. Returns artifact_id and, when a reachable base URL is available, a temporary signed download URL. Directories are packaged as tar.gz.", Annotations: mutatingToolAnnotations(false, true), FileArgRewritePaths: []string{"file"}, Handler: func(ctx context.Context, r *Runtime, args map[string]any) (Result, error) {
 			return r.media.FilePublish(ctx, args)
 		}},
-	})
+	}, codingToolSpecs()...))
 }
 
 func bindToolSchemas(specs []ToolSpec) []ToolSpec {

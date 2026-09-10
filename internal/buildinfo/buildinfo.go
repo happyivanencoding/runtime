@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package buildinfo
 
 import (
@@ -6,7 +7,8 @@ import (
 	"strings"
 )
 
-const Version = "0.8.1"
+// runtime-core working build; original AgentDock baseline is recorded in NOTICE.
+const Version = "0.1.0-runtime-core.1"
 
 var (
 	Commit    string

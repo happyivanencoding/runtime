@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package app
 
 import (
@@ -7,8 +8,11 @@ import (
 )
 
 func InputSchema(name string) map[string]any {
-	if schema, ok := mcpcontract.InputSchema(name); ok {
+	if schema, ok := codingInputSchema(name); ok {
 		return schema
+	}
+	if schema, ok := mcpcontract.InputSchema(name); ok {
+		return withCodingContext(name, schema)
 	}
 	props := map[string]any{}
 	required := []string{}
@@ -326,7 +330,7 @@ func InputSchema(name string) map[string]any {
 	if len(required) > 0 {
 		schema["required"] = required
 	}
-	return schema
+	return withCodingContext(name, schema)
 }
 
 func browserActionsProp() map[string]any {

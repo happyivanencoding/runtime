@@ -1,3 +1,4 @@
+// Modified for runtime-core in 2026; original upstream notices are retained.
 package command
 
 import (
@@ -35,6 +36,12 @@ const (
 func NewSessionStore() *SessionStore { return session.NewStore() }
 
 func (svc *Service) Exec(ctx context.Context, args map[string]any) (Result, error) {
+	return svc.ExecObserved(ctx, args, nil)
+}
+
+// ExecObserved exposes the existing session to an in-process evidence observer.
+// It does not change execution, output consumption or session-retention behavior.
+func (svc *Service) ExecObserved(ctx context.Context, args map[string]any, observe func(*session.Session)) (Result, error) {
 	cmd := stringArg(args, "cmd", "")
 	if cmd == "" {
 		return nil, toolError("INVALID_ARGUMENT", "cmd is required", "validation")
@@ -98,6 +105,9 @@ func (svc *Service) Exec(ctx context.Context, args map[string]any) (Result, erro
 		return nil, err
 	}
 	s.SetExecutionContext(invocation.execution)
+	if observe != nil {
+		observe(s)
+	}
 	if stdin := stringArg(args, "stdin", ""); stdin != "" {
 		if err := s.Write(stdin); err != nil {
 			s.Kill()
