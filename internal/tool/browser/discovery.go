@@ -89,6 +89,23 @@ func pathsForKind(goos string, kind Kind) []string {
 		programFiles := os.Getenv("ProgramFiles")
 		programFilesX86 := os.Getenv("ProgramFiles(x86)")
 		localAppData := os.Getenv("LOCALAPPDATA")
+		// Dynamic MCP/stdio hosts may intentionally start Runtime with a narrow
+		// environment. Browser discovery must not depend on ProgramFiles or
+		// LOCALAPPDATA being forwarded when the standard Windows locations are
+		// still unambiguous from the user home drive.
+		drive := filepath.VolumeName(home)
+		if drive == "" {
+			drive = "C:"
+		}
+		if strings.TrimSpace(programFiles) == "" {
+			programFiles = filepath.Join(drive+string(filepath.Separator), "Program Files")
+		}
+		if strings.TrimSpace(programFilesX86) == "" {
+			programFilesX86 = filepath.Join(drive+string(filepath.Separator), "Program Files (x86)")
+		}
+		if strings.TrimSpace(localAppData) == "" && strings.TrimSpace(home) != "" {
+			localAppData = filepath.Join(home, "AppData", "Local")
+		}
 		switch kind {
 		case BrowserChrome:
 			return compactPaths(

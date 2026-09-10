@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	"github.com/uvwt/agentdock/internal/browserbridge"
 )
 
 const defaultStaleAge = 6 * time.Hour
@@ -30,22 +32,26 @@ type Config struct {
 }
 
 type Service struct {
-	mu          sync.Mutex
-	cfg         Config
-	sessions    map[string]*session
-	profiles    map[string]string
-	closed      bool
-	now         func() time.Time
-	discoverCDP func(context.Context) ([]cdpCandidate, error)
+	mu                sync.Mutex
+	cfg               Config
+	sessions          map[string]*session
+	extensionSessions map[string]*extensionSession
+	profiles          map[string]string
+	closed            bool
+	now               func() time.Time
+	discoverCDP       func(context.Context) ([]cdpCandidate, error)
+	bridge            browserbridge.Client
 }
 
 func New(cfg Config) *Service {
 	return &Service{
-		cfg:         cfg,
-		sessions:    make(map[string]*session),
-		profiles:    make(map[string]string),
-		now:         time.Now,
-		discoverCDP: discoverCDPEndpoints,
+		cfg:               cfg,
+		sessions:          make(map[string]*session),
+		extensionSessions: make(map[string]*extensionSession),
+		profiles:          make(map[string]string),
+		now:               time.Now,
+		discoverCDP:       discoverCDPEndpoints,
+		bridge:            browserbridge.Client{Home: cfg.AgentDockHome},
 	}
 }
 
@@ -55,6 +61,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartResult, err
 	s.mu.Unlock()
 	if closed {
 		return StartResult{}, browserError(ErrActionFailed, "browser service is closed", "runtime", nil, nil)
+	}
+	if strings.EqualFold(strings.TrimSpace(req.Transport), "extension") {
+		return s.startExtension(ctx, req)
 	}
 	if req.Timeout <= 0 {
 		req.Timeout = 30 * time.Second
@@ -117,6 +126,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartResult, err
 			id:              newSessionID(),
 			kind:            BrowserAuto,
 			external:        true,
+			showCursor:      req.ShowCursor,
 			ownedTargets:    make(map[target.ID]struct{}),
 			createdAt:       s.now(),
 			lastActivity:    s.now(),
@@ -162,6 +172,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartResult, err
 		sess = &session{
 			id:               newSessionID(),
 			kind:             executable.Kind,
+			showCursor:       req.ShowCursor,
 			profileID:        profileID,
 			profileDir:       profileDir,
 			temporaryProfile: temporary,
@@ -176,6 +187,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartResult, err
 			pageContexts:     make(map[target.ID]*pageContext),
 		}
 	}
+	sess.downloadDir = filepath.Join(s.cfg.AgentDockHome, "browser", "downloads", sess.id)
 	chromedp.ListenBrowser(sess.browserCtx, func(ev any) { sess.recordTargetEvent(ev) })
 
 	launchCtx, cancel := context.WithTimeout(ctx, req.Timeout)
@@ -303,6 +315,18 @@ func (s *Service) resolveCDPConnection(ctx context.Context, req StartRequest) (s
 }
 
 func (s *Service) CloseSession(req CloseRequest) (CloseResult, error) {
+	if extension, ok := s.getExtensionSession(req.SessionID); ok {
+		extension.opMu.Lock()
+		defer extension.opMu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := s.detachExtensionTab(ctx, extension.tabID)
+		cancel()
+		if err != nil {
+			return CloseResult{}, browserError(ErrCDPFailed, "detach Runtime Chrome extension tab", "extension", &ErrorDetails{SessionID: req.SessionID, PageID: strconv.Itoa(extension.tabID)}, err)
+		}
+		s.removeExtensionSession(req.SessionID)
+		return CloseResult{SessionID: req.SessionID, Closed: true}, nil
+	}
 	sess, err := s.removeSession(req.SessionID)
 	if err != nil {
 		return CloseResult{}, err
@@ -321,6 +345,7 @@ func (s *Service) CleanupStale(req CleanupRequest) CleanupResult {
 
 	s.mu.Lock()
 	var stale []*session
+	var staleExtensions []*extensionSession
 	for id, sess := range s.sessions {
 		sess.mu.Lock()
 		lastActivity := sess.lastActivity
@@ -331,13 +356,26 @@ func (s *Service) CleanupStale(req CleanupRequest) CleanupResult {
 		delete(s.sessions, id)
 		stale = append(stale, sess)
 	}
+	for id, sess := range s.extensionSessions {
+		if sess.lastActivity.After(cutoff) {
+			continue
+		}
+		delete(s.extensionSessions, id)
+		staleExtensions = append(staleExtensions, sess)
+	}
 	s.mu.Unlock()
 
-	removed := make([]string, 0, len(stale))
+	removed := make([]string, 0, len(stale)+len(staleExtensions))
 	for _, sess := range stale {
 		removed = append(removed, sess.id)
 		sess.stop()
 		s.releaseSessionProfile(sess)
+	}
+	for _, sess := range staleExtensions {
+		removed = append(removed, sess.id)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = s.detachExtensionTab(ctx, sess.tabID)
+		cancel()
 	}
 	sort.Strings(removed)
 	return CleanupResult{RemovedCount: len(removed), RemovedSessions: removed}
@@ -357,12 +395,22 @@ func (s *Service) Close() error {
 	for _, sess := range s.sessions {
 		sessions = append(sessions, sess)
 	}
+	extensions := make([]*extensionSession, 0, len(s.extensionSessions))
+	for _, sess := range s.extensionSessions {
+		extensions = append(extensions, sess)
+	}
 	s.sessions = make(map[string]*session)
+	s.extensionSessions = make(map[string]*extensionSession)
 	s.mu.Unlock()
 
 	for _, sess := range sessions {
 		sess.stop()
 		s.releaseSessionProfile(sess)
+	}
+	for _, sess := range extensions {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = s.detachExtensionTab(ctx, sess.tabID)
+		cancel()
 	}
 	s.mu.Lock()
 	s.profiles = make(map[string]string)
@@ -470,6 +518,7 @@ func (sess *session) stop() {
 	profileDir := sess.profileDir
 	temporary := sess.temporaryProfile
 	external := sess.external
+	downloadDir := sess.downloadDir
 	pageCancels := make([]context.CancelFunc, 0, len(sess.pageContexts))
 	for _, pageCtx := range sess.pageContexts {
 		if pageCtx != nil && pageCtx.cancel != nil {
@@ -490,6 +539,9 @@ func (sess *session) stop() {
 		}
 		if allocatorCancel != nil {
 			allocatorCancel()
+		}
+		if downloadDir != "" {
+			_ = os.RemoveAll(downloadDir)
 		}
 		return
 	}
@@ -515,6 +567,9 @@ func (sess *session) stop() {
 	}
 	if temporary {
 		_ = os.RemoveAll(profileDir)
+	}
+	if downloadDir != "" {
+		_ = os.RemoveAll(downloadDir)
 	}
 }
 
@@ -715,6 +770,73 @@ func (sess *session) selectPage(requested string) (target.ID, error) {
 		return "", browserError(ErrPageNotFound, "browser page was not found", "page", &ErrorDetails{PageID: requested, AvailablePageIDs: available}, nil)
 	}
 	return id, nil
+}
+
+func (sess *session) createPage(ctx context.Context, rawURL string) (target.ID, error) {
+	url := strings.TrimSpace(rawURL)
+	if url == "" {
+		url = "about:blank"
+	}
+	chromedpCtx := chromedp.FromContext(sess.browserCtx)
+	if chromedpCtx == nil || chromedpCtx.Browser == nil {
+		return "", browserError(ErrCDPFailed, "browser connection is unavailable", "tab_new", nil, nil)
+	}
+	id, err := target.CreateTarget(url).Do(cdp.WithExecutor(ctx, chromedpCtx.Browser))
+	if err != nil {
+		return "", classifyOperationError(err, "tab_new")
+	}
+	if err := sess.refreshPages(); err != nil {
+		return "", browserError(ErrCDPFailed, "refresh pages after creating tab", "tab_new", nil, err)
+	}
+	sess.mu.Lock()
+	if _, ok := sess.pages[id]; ok {
+		sess.activePage = id
+	}
+	sess.mu.Unlock()
+	return id, nil
+}
+
+func (sess *session) activatePage(ctx context.Context, requested string) (target.ID, error) {
+	id, err := sess.selectPage(requested)
+	if err != nil {
+		return "", err
+	}
+	chromedpCtx := chromedp.FromContext(sess.browserCtx)
+	if chromedpCtx == nil || chromedpCtx.Browser == nil {
+		return "", browserError(ErrCDPFailed, "browser connection is unavailable", "tab_switch", nil, nil)
+	}
+	if err := target.ActivateTarget(id).Do(cdp.WithExecutor(ctx, chromedpCtx.Browser)); err != nil {
+		return "", classifyOperationError(err, "tab_switch")
+	}
+	sess.mu.Lock()
+	sess.activePage = id
+	sess.mu.Unlock()
+	return id, nil
+}
+
+func (sess *session) closePage(ctx context.Context, requested string) error {
+	id, err := sess.selectPage(requested)
+	if err != nil {
+		return err
+	}
+	chromedpCtx := chromedp.FromContext(sess.browserCtx)
+	if chromedpCtx == nil || chromedpCtx.Browser == nil {
+		return browserError(ErrCDPFailed, "browser connection is unavailable", "tab_close", nil, nil)
+	}
+	if err := target.CloseTarget(id).Do(cdp.WithExecutor(ctx, chromedpCtx.Browser)); err != nil {
+		return classifyOperationError(err, "tab_close")
+	}
+	if err := sess.refreshPages(); err != nil {
+		return browserError(ErrCDPFailed, "refresh pages after closing tab", "tab_close", nil, err)
+	}
+	sess.mu.Lock()
+	empty := len(sess.pages) == 0
+	sess.mu.Unlock()
+	if empty {
+		_, err := sess.createPage(ctx, "about:blank")
+		return err
+	}
+	return nil
 }
 
 func (sess *session) mostRecentPageLocked() target.ID {

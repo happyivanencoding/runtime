@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uvwt/agentdock/internal/computer/desktop"
 	toolbrowser "github.com/uvwt/agentdock/internal/tool/browser"
 )
 
@@ -20,7 +21,7 @@ func (r *Runtime) browserSession(ctx context.Context, args map[string]any) (Resu
 	}
 	switch action {
 	case "start":
-		if err := validateBrowserKeys(args, "action", "url", "browser", "headless", "viewport", "profile_id", "cdp_url", "cookies", "local_storage", "reload_after_local_storage", "timeout_ms"); err != nil {
+		if err := validateBrowserKeys(args, "action", "transport", "tab_id", "show_cursor", "url", "browser", "headless", "viewport", "profile_id", "cdp_url", "cookies", "local_storage", "reload_after_local_storage", "timeout_ms"); err != nil {
 			return browserFailure(err), nil
 		}
 		req, err := parseBrowserStart(args)
@@ -32,6 +33,23 @@ func (r *Runtime) browserSession(ctx context.Context, args map[string]any) (Resu
 			return browserFailure(err), nil
 		}
 		result := browserResultMap(started)
+		result["browser_ok"] = true
+		return result, nil
+	case "extension_status":
+		if err := validateBrowserKeys(args, "action", "timeout_ms"); err != nil {
+			return browserFailure(err), nil
+		}
+		timeout, err := durationArg(args, "timeout_ms", 5*time.Second, time.Millisecond, 30*time.Second)
+		if err != nil {
+			return browserFailure(err), nil
+		}
+		statusCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		status, err := r.browser.ExtensionStatus(statusCtx)
+		if err != nil {
+			return browserFailure(err), nil
+		}
+		result := browserResultMap(status)
 		result["browser_ok"] = true
 		return result, nil
 	case "close":
@@ -73,7 +91,7 @@ func (r *Runtime) browserSession(ctx context.Context, args map[string]any) (Resu
 }
 
 func (r *Runtime) browserAct(ctx context.Context, args map[string]any) (Result, error) {
-	if err := validateBrowserKeys(args, "session_id", "page_id", "actions", "full_page", "max_text_chars", "max_interactive_elements", "retention_seconds", "close_after", "timeout_ms"); err != nil {
+	if err := validateBrowserKeys(args, "session_id", "page_id", "actions", "desktop_fallback", "full_page", "max_text_chars", "max_dom_chars", "max_interactive_elements", "retention_seconds", "close_after", "timeout_ms"); err != nil {
 		return browserFailure(err), nil
 	}
 	sessionID, err := requiredString(args, "session_id")
@@ -81,6 +99,10 @@ func (r *Runtime) browserAct(ctx context.Context, args map[string]any) (Result, 
 		return browserFailure(err), nil
 	}
 	actions, err := parseBrowserActions(args["actions"])
+	if err != nil {
+		return browserFailure(err), nil
+	}
+	fallback, err := parseDesktopBrowserFallback(args["desktop_fallback"])
 	if err != nil {
 		return browserFailure(err), nil
 	}
@@ -97,6 +119,10 @@ func (r *Runtime) browserAct(ctx context.Context, args map[string]any) (Result, 
 		return browserFailure(err), nil
 	}
 	maxText, err := intArgRange(args, "max_text_chars", 8000, 1, 50000)
+	if err != nil {
+		return browserFailure(err), nil
+	}
+	maxDOM, err := intArgRange(args, "max_dom_chars", 20000, 1, 200000)
 	if err != nil {
 		return browserFailure(err), nil
 	}
@@ -115,9 +141,19 @@ func (r *Runtime) browserAct(ctx context.Context, args map[string]any) (Result, 
 
 	snapshot, err := r.browser.Act(ctx, toolbrowser.ActRequest{
 		SessionID: sessionID, PageID: pageID, Actions: actions, FullPage: fullPage,
-		MaxTextChars: maxText, MaxInteractiveElements: maxInteractive, Timeout: timeout,
+		MaxTextChars: maxText, MaxDOMChars: maxDOM, MaxInteractiveElements: maxInteractive, Timeout: timeout,
 	})
 	if err != nil {
+		if fallback != nil && browserAllowsDesktopFallback(err) {
+			fallbackResult, fallbackErr := r.desktop.Act(ctx, *fallback)
+			if fallbackErr == nil {
+				browserErr := browserFailure(err)
+				return Result{
+					"browser_ok": true, "fallback_used": true, "fallback_backend": "windows_uia",
+					"browser_error": browserErr["error"], "fallback_result": fallbackResult,
+				}, nil
+			}
+		}
 		return browserFailure(err), nil
 	}
 	result, err := r.publishBrowserSnapshot(ctx, snapshot, retention)
@@ -134,7 +170,7 @@ func (r *Runtime) browserAct(ctx context.Context, args map[string]any) (Result, 
 }
 
 func (r *Runtime) browserSnapshot(ctx context.Context, args map[string]any) (Result, error) {
-	if err := validateBrowserKeys(args, "session_id", "page_id", "full_page", "max_text_chars", "max_interactive_elements", "retention_seconds", "close_after", "timeout_ms"); err != nil {
+	if err := validateBrowserKeys(args, "session_id", "page_id", "full_page", "max_text_chars", "max_dom_chars", "max_interactive_elements", "retention_seconds", "close_after", "timeout_ms"); err != nil {
 		return browserFailure(err), nil
 	}
 	sessionID, err := requiredString(args, "session_id")
@@ -157,6 +193,10 @@ func (r *Runtime) browserSnapshot(ctx context.Context, args map[string]any) (Res
 	if err != nil {
 		return browserFailure(err), nil
 	}
+	maxDOM, err := intArgRange(args, "max_dom_chars", 20000, 1, 200000)
+	if err != nil {
+		return browserFailure(err), nil
+	}
 	maxInteractive, err := intArgRange(args, "max_interactive_elements", 40, 1, 200)
 	if err != nil {
 		return browserFailure(err), nil
@@ -172,7 +212,7 @@ func (r *Runtime) browserSnapshot(ctx context.Context, args map[string]any) (Res
 
 	snapshot, err := r.browser.Snapshot(ctx, toolbrowser.SnapshotRequest{
 		SessionID: sessionID, PageID: pageID, FullPage: fullPage,
-		MaxTextChars: maxText, MaxInteractiveElements: maxInteractive, Timeout: timeout,
+		MaxTextChars: maxText, MaxDOMChars: maxDOM, MaxInteractiveElements: maxInteractive, Timeout: timeout,
 	})
 	if err != nil {
 		return browserFailure(err), nil
@@ -198,11 +238,102 @@ func (r *Runtime) publishBrowserSnapshot(ctx context.Context, snapshot toolbrows
 	result := browserResultMap(snapshot)
 	result["browser_ok"] = true
 	result["screenshot"] = published
+	if len(snapshot.Downloads) > 0 {
+		downloadArtifacts := make([]any, 0, len(snapshot.Downloads))
+		for _, download := range snapshot.Downloads {
+			if strings.TrimSpace(download.Path) == "" {
+				continue
+			}
+			artifact, err := r.media.FilePublish(ctx, map[string]any{"path": download.Path, "retention_seconds": retention})
+			if err != nil {
+				return nil, fmt.Errorf("publish browser download %s: %w", download.SuggestedFilename, err)
+			}
+			downloadArtifacts = append(downloadArtifacts, map[string]any{
+				"guid": download.GUID, "suggested_filename": download.SuggestedFilename, "artifact": artifact,
+			})
+		}
+		result["download_artifacts"] = downloadArtifacts
+	}
 	return result, nil
 }
 
+func parseDesktopBrowserFallback(raw any) (*desktop.Request, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	value, ok := raw.(map[string]any)
+	if !ok {
+		return nil, browserInvalid("desktop_fallback must be an object", map[string]any{"field": "desktop_fallback"})
+	}
+	if err := validateBrowserKeys(value, "action", "window_handle", "selector", "text", "direction", "amount"); err != nil {
+		return nil, err
+	}
+	action, err := requiredString(value, "action")
+	if err != nil {
+		return nil, err
+	}
+	switch action {
+	case "focus", "press", "type", "scroll", "toggle", "select":
+	default:
+		return nil, browserInvalid("desktop_fallback action must be focus, press, type, scroll, toggle, or select", map[string]any{"field": "action"})
+	}
+	if action == "type" {
+		if _, exists := value["text"]; !exists {
+			return nil, browserInvalid("desktop_fallback type requires an explicit text field", map[string]any{"field": "text"})
+		}
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, browserInvalid("desktop_fallback could not be encoded", map[string]any{"field": "desktop_fallback"})
+	}
+	var request desktop.Request
+	if err := json.Unmarshal(encoded, &request); err != nil {
+		return nil, browserInvalid("desktop_fallback has invalid field types", map[string]any{"field": "desktop_fallback"})
+	}
+	if request.WindowHandle == 0 {
+		return nil, browserInvalid("desktop_fallback requires window_handle", map[string]any{"field": "window_handle"})
+	}
+	if request.Selector.RuntimeID == "" && request.Selector.AutomationID == "" && request.Selector.Name == "" && request.Selector.NameContains == "" && request.Selector.ControlType == "" {
+		return nil, browserInvalid("desktop_fallback requires a semantic UI Automation selector", map[string]any{"field": "selector"})
+	}
+	return &request, nil
+}
+
+func browserAllowsDesktopFallback(err error) bool {
+	var browserErr *toolbrowser.Error
+	if !errors.As(err, &browserErr) {
+		return false
+	}
+	switch browserErr.Code {
+	case toolbrowser.ErrActionFailed, toolbrowser.ErrTimeout, toolbrowser.ErrCDPFailed, toolbrowser.ErrPageNotFound, toolbrowser.ErrNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
 func parseBrowserStart(args map[string]any) (toolbrowser.StartRequest, error) {
-	urlValue, err := optionalString(args, "url", "about:blank")
+	transport, err := optionalString(args, "transport", "cdp")
+	if err != nil {
+		return toolbrowser.StartRequest{}, err
+	}
+	transport = strings.ToLower(strings.TrimSpace(transport))
+	if transport != "cdp" && transport != "extension" {
+		return toolbrowser.StartRequest{}, browserInvalid("transport must be cdp or extension", map[string]any{"field": "transport"})
+	}
+	defaultURL := "about:blank"
+	if transport == "extension" {
+		defaultURL = ""
+	}
+	urlValue, err := optionalString(args, "url", defaultURL)
+	if err != nil {
+		return toolbrowser.StartRequest{}, err
+	}
+	tabID, err := intArgRange(args, "tab_id", 0, 1, math.MaxInt32)
+	if err != nil {
+		return toolbrowser.StartRequest{}, err
+	}
+	showCursor, err := boolArgStrict(args, "show_cursor", true)
 	if err != nil {
 		return toolbrowser.StartRequest{}, err
 	}
@@ -249,6 +380,7 @@ func parseBrowserStart(args map[string]any) (toolbrowser.StartRequest, error) {
 		return toolbrowser.StartRequest{}, err
 	}
 	return toolbrowser.StartRequest{
+		Transport: transport, TabID: tabID, ShowCursor: showCursor,
 		URL: urlValue, Browser: kind, Headless: headless, Viewport: viewport,
 		ProfileID: profileID, CDPURL: cdpURL,
 		Cookies: cookies, LocalStorage: storage,
@@ -475,6 +607,72 @@ func parseBrowserAction(value map[string]any) (toolbrowser.Action, error) {
 			return toolbrowser.Action{}, err
 		}
 		return toolbrowser.Action{Kind: name, Fill: &toolbrowser.FillAction{Selector: selector, Value: text}}, nil
+	case "type":
+		if err := validateBrowserKeys(value, "action", "selector", "text"); err != nil {
+			return toolbrowser.Action{}, err
+		}
+		selector, err := requiredCSSSelector(value)
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		text, err := requiredStringAllowEmpty(value, "text")
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		return toolbrowser.Action{Kind: name, Type: &toolbrowser.TypeAction{Selector: selector, Text: text}}, nil
+	case "upload":
+		if err := validateBrowserKeys(value, "action", "selector", "paths"); err != nil {
+			return toolbrowser.Action{}, err
+		}
+		selector, err := requiredCSSSelector(value)
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		paths, err := browserStringArray(value["paths"], "paths", 1, 32)
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		return toolbrowser.Action{Kind: name, Upload: &toolbrowser.UploadAction{Selector: selector, Paths: paths}}, nil
+	case "download":
+		if err := validateBrowserKeys(value, "action", "selector", "timeout_ms"); err != nil {
+			return toolbrowser.Action{}, err
+		}
+		selector, err := requiredCSSSelector(value)
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		t, err := timeout()
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		return toolbrowser.Action{Kind: name, Download: &toolbrowser.DownloadAction{Selector: selector, Timeout: t}}, nil
+	case "tab_new":
+		if err := validateBrowserKeys(value, "action", "url"); err != nil {
+			return toolbrowser.Action{}, err
+		}
+		urlValue, err := optionalString(value, "url", "about:blank")
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		return toolbrowser.Action{Kind: name, TabNew: &toolbrowser.TabNewAction{URL: urlValue}}, nil
+	case "tab_switch":
+		if err := validateBrowserKeys(value, "action", "page_id"); err != nil {
+			return toolbrowser.Action{}, err
+		}
+		pageID, err := requiredString(value, "page_id")
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		return toolbrowser.Action{Kind: name, TabSwitch: &toolbrowser.TabSwitchAction{PageID: pageID}}, nil
+	case "tab_close":
+		if err := validateBrowserKeys(value, "action", "page_id"); err != nil {
+			return toolbrowser.Action{}, err
+		}
+		pageID, err := optionalString(value, "page_id", "")
+		if err != nil {
+			return toolbrowser.Action{}, err
+		}
+		return toolbrowser.Action{Kind: name, TabClose: &toolbrowser.TabCloseAction{PageID: pageID}}, nil
 	case "press":
 		if err := validateBrowserKeys(value, "action", "selector", "key"); err != nil {
 			return toolbrowser.Action{}, err
@@ -633,6 +831,22 @@ func parseBrowserAction(value map[string]any) (toolbrowser.Action, error) {
 	default:
 		return toolbrowser.Action{}, browserInvalid("unknown browser action", map[string]any{"action": name})
 	}
+}
+
+func browserStringArray(raw any, field string, minItems, maxItems int) ([]string, error) {
+	values, ok := raw.([]any)
+	if !ok || len(values) < minItems || len(values) > maxItems {
+		return nil, browserInvalid(fmt.Sprintf("%s must contain between %d and %d strings", field, minItems, maxItems), map[string]any{"field": field})
+	}
+	result := make([]string, 0, len(values))
+	for index, rawValue := range values {
+		value, ok := rawValue.(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil, browserInvalid(field+" values must be non-empty strings", map[string]any{"field": field, "index": index})
+		}
+		result = append(result, strings.TrimSpace(value))
+	}
+	return result, nil
 }
 
 func validateBrowserKeys(values map[string]any, allowed ...string) error {

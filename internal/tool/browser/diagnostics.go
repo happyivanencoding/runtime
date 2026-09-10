@@ -16,9 +16,11 @@ import (
 const maxDiagnosticResponses = 200
 
 type responseRecord struct {
-	URL    string
-	Method string
-	Status int
+	URL          string
+	Method       string
+	Status       int
+	MimeType     string
+	ResourceType string
 }
 
 type requestRecord struct {
@@ -63,7 +65,7 @@ func (d *diagnostics) recordEvent(ev any) {
 		if event.Response == nil {
 			return
 		}
-		record := responseRecord{URL: event.Response.URL, Status: int(event.Response.Status)}
+		record := responseRecord{URL: event.Response.URL, Status: int(event.Response.Status), MimeType: event.Response.MimeType, ResourceType: string(event.Type)}
 		if request, ok := d.requests[event.RequestID]; ok {
 			record.Method = request.Method
 		}
@@ -122,10 +124,14 @@ func (d *diagnostics) enable(parent, pageCtx context.Context) error {
 	)
 }
 
-func (d *diagnostics) snapshot() ([]ConsoleError, []NetworkError, []PageError) {
+func (d *diagnostics) snapshot() ([]ConsoleError, []NetworkEvent, []NetworkError, []PageError) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return append([]ConsoleError(nil), d.consoleErrors...), append([]NetworkError(nil), d.networkErrors...), append([]PageError(nil), d.pageErrors...)
+	events := make([]NetworkEvent, 0, len(d.responses))
+	for _, response := range d.responses {
+		events = append(events, NetworkEvent{URL: response.URL, Method: response.Method, Status: response.Status, MimeType: response.MimeType, ResourceType: response.ResourceType})
+	}
+	return append([]ConsoleError(nil), d.consoleErrors...), events, append([]NetworkError(nil), d.networkErrors...), append([]PageError(nil), d.pageErrors...)
 }
 
 func (d *diagnostics) hasMatchingResponse(action WaitResponseAction) bool {

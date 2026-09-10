@@ -74,9 +74,12 @@ func TestCodingNativeContextIsolationAndArtifacts(t *testing.T) {
 	if rt.acp != nil {
 		t.Fatal("coding initialization unexpectedly created an ACP transport")
 	}
+	if rt.acpAdapters == nil {
+		t.Fatal("runtime ACP adapter registry is unavailable")
+	}
 	for _, name := range rt.ToolNames() {
-		if strings.HasPrefix(name, "acp_") {
-			t.Fatalf("ACP disabled but %s exposed", name)
+		if name == "acp_session" || name == "acp_prompt" || name == "acp_interaction" {
+			t.Fatalf("legacy ACP transport disabled but %s exposed", name)
 		}
 	}
 	a := codingTestRepo(t, "alpha-body-marker")

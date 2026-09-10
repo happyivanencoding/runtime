@@ -170,6 +170,34 @@ func InputSchema(name string) map[string]any {
 		props["superseded_by"] = stringProp("Replacement evolution_id for supersede when already known.")
 		required = []string{"intent"}
 
+	case "acp_start":
+		props["agent"] = map[string]any{"type": "string", "description": "ACP agent preset or custom agent identity. Built-in presets: codex, claude, grok. Defaults to codex."}
+		props["command"] = stringProp("Optional absolute ACP adapter executable path. Required for custom agents that Runtime cannot auto-resolve.")
+		props["args"] = map[string]any{"type": "array", "maxItems": 64, "items": map[string]any{"type": "string"}, "description": "Adapter process arguments when command is explicit."}
+		props["env_from_env"] = map[string]any{"type": "object", "description": "Child environment variable name to host environment variable name. Values are resolved only when the adapter is started and are never returned.", "additionalProperties": map[string]any{"type": "string"}}
+		props["cwd"] = stringProp("ACP session working directory. Defaults to Runtime's default directory.")
+		props["additional_directories"] = map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": map[string]any{"type": "string"}}
+		props["prompt"] = stringProp("Optional first ACP prompt. When present, acp_start starts the prompt asynchronously and returns run_id.")
+	case "acp_resume":
+		props["session_id"] = stringProp("Persisted Runtime ACP session id.")
+		props["command"] = stringProp("Optional absolute adapter command, normally only needed to resume a custom adapter after Runtime restart.")
+		props["args"] = map[string]any{"type": "array", "maxItems": 64, "items": map[string]any{"type": "string"}}
+		props["env_from_env"] = map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}
+		props["prompt"] = stringProp("Optional new prompt to start immediately after the persisted ACP session is resumed.")
+		required = []string{"session_id"}
+	case "acp_status":
+		props["session_id"] = stringProp("Optional persisted ACP session id. Omit to list adapter availability and persisted sessions without starting an agent.")
+		props["run_id"] = stringProp("Optional current-process run id. If omitted, Runtime uses the most recent run it started for session_id when available.")
+		props["after_seq"] = map[string]any{"type": "integer", "minimum": 0, "description": "Return prompt events after this sequence."}
+		props["limit"] = boundedIntProp("Maximum prompt events. Defaults to 100.", 1, 200)
+		props["wait_ms"] = boundedIntProp("Optional bounded long-poll for prompt events.", 0, 25000)
+	case "acp_stop":
+		props["session_id"] = stringProp("Persisted ACP session id to cancel/close.")
+		props["run_id"] = stringProp("Optional active run id. Omit to stop the most recent Runtime-started run for this session.")
+		props["command"] = stringProp("Optional absolute adapter command for a custom adapter after Runtime restart.")
+		props["args"] = map[string]any{"type": "array", "maxItems": 64, "items": map[string]any{"type": "string"}}
+		props["env_from_env"] = map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}
+		required = []string{"session_id"}
 	case "acp_session":
 		props["action"] = map[string]any{"type": "string", "description": "ACP session action.", "enum": []string{"info", "authenticate", "new", "load", "resume", "fork", "set_mode", "set_config", "list", "inspect", "close", "delete"}}
 		props["auth_method_id"] = stringProp("Authentication method id advertised by initialize, required for authenticate.")
@@ -244,7 +272,10 @@ func InputSchema(name string) map[string]any {
 		props["retention_seconds"] = intProp("Signed URL retention in seconds. Defaults to 86400 and is capped at 604800.")
 		required = []string{}
 	case "browser_session":
-		props["action"] = map[string]any{"type": "string", "description": "Browser session action.", "enum": []string{"start", "close", "cleanup_stale"}}
+		props["action"] = map[string]any{"type": "string", "description": "Browser session action.", "enum": []string{"start", "extension_status", "close", "cleanup_stale"}}
+		props["transport"] = map[string]any{"type": "string", "description": "Browser transport for action=start. cdp launches/attaches Chromium directly; extension attaches an existing Chrome tab through Runtime Chrome Bridge. Defaults to cdp.", "enum": []string{"cdp", "extension"}}
+		props["tab_id"] = map[string]any{"type": "integer", "minimum": 1, "description": "Existing Chrome tab id for transport=extension. Omit to attach the active tab in the current Chrome window."}
+		props["show_cursor"] = boolProp("Show Runtime's glowing visual cursor for element interactions. Defaults to true; it never receives pointer events and is excluded from serialized DOM snapshots.")
 		props["url"] = stringProp("Initial URL for action=start. Defaults to about:blank in the AgentDock-managed target.")
 		props["browser"] = map[string]any{"type": "string", "description": "Chromium-family browser to launch. Defaults to auto.", "enum": []string{"auto", "chrome", "chromium", "edge"}}
 		props["headless"] = boolProp("Run the AgentDock-owned browser headless. Defaults to true.")
@@ -283,8 +314,24 @@ func InputSchema(name string) map[string]any {
 		props["session_id"] = stringProp("In-memory browser session id.")
 		props["page_id"] = stringProp("Optional CDP target id. Omit to use the active page.")
 		props["actions"] = browserActionsProp()
+		props["desktop_fallback"] = map[string]any{
+			"type": "object", "additionalProperties": false,
+			"description": "Optional explicit Windows UI Automation fallback. It is attempted only when the browser transport fails with an operational CDP/page/action error; CSS selectors are never translated into screen coordinates.",
+			"required":    []string{"action", "window_handle", "selector"},
+			"properties": map[string]any{
+				"action":        map[string]any{"type": "string", "enum": []string{"focus", "press", "type", "scroll", "toggle", "select"}},
+				"window_handle": map[string]any{"type": "integer", "minimum": 1},
+				"selector": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{
+					"runtime_id": stringProp("UIA runtime id."), "automation_id": stringProp("UIA AutomationId."), "name": stringProp("Exact accessible name."), "name_contains": stringProp("Accessible name substring."), "control_type": stringProp("UIA control type."),
+				}},
+				"text":      stringProp("Replacement text for UIA type."),
+				"direction": map[string]any{"type": "string", "enum": []string{"up", "down", "left", "right"}},
+				"amount":    map[string]any{"type": "string", "enum": []string{"small", "large"}},
+			},
+		}
 		props["full_page"] = boolProp("Capture the full page in the final PNG screenshot.")
 		props["max_text_chars"] = boundedIntProp("Maximum normalized body text characters. Defaults to 8000.", 1, 50000)
+		props["max_dom_chars"] = boundedIntProp("Maximum serialized live DOM characters. Defaults to 20000.", 1, 200000)
 		props["max_interactive_elements"] = boundedIntProp("Maximum visible interactive elements. Defaults to 40.", 1, 200)
 		props["retention_seconds"] = boundedIntProp("Screenshot Artifact retention seconds. Zero uses the Artifact default; capped at 604800.", 0, 604800)
 		props["close_after"] = boolProp("Close the session only after all actions, final snapshot, and screenshot Artifact publication succeed.")
@@ -295,6 +342,7 @@ func InputSchema(name string) map[string]any {
 		props["page_id"] = stringProp("Optional CDP target id. Omit to use the active page.")
 		props["full_page"] = boolProp("Capture the full page directly through CDP as PNG.")
 		props["max_text_chars"] = boundedIntProp("Maximum normalized body text characters. Defaults to 8000.", 1, 50000)
+		props["max_dom_chars"] = boundedIntProp("Maximum serialized live DOM characters. Defaults to 20000.", 1, 200000)
 		props["max_interactive_elements"] = boundedIntProp("Maximum visible interactive elements. Defaults to 40.", 1, 200)
 		props["retention_seconds"] = boundedIntProp("Screenshot Artifact retention seconds. Zero uses the Artifact default; capped at 604800.", 0, 604800)
 		props["close_after"] = boolProp("Close the session only after snapshot and screenshot Artifact publication succeed.")
@@ -326,7 +374,7 @@ func InputSchema(name string) map[string]any {
 		}
 	}
 	switch name {
-	case "list_dir", "exec_command", "acp_session", "acp_prompt", "acp_interaction", "mcp_manage", "mcp_tool_search", "mcp_tool_inspect", "mcp_tool_call", "browser_session", "browser_act", "browser_snapshot":
+	case "list_dir", "exec_command", "acp_start", "acp_resume", "acp_status", "acp_stop", "acp_session", "acp_prompt", "acp_interaction", "mcp_manage", "mcp_tool_search", "mcp_tool_inspect", "mcp_tool_call", "browser_session", "browser_act", "browser_snapshot":
 		// 这些工具的参数契约需要严格收敛，避免删除或拼错的字段被静默忽略。
 		schema["additionalProperties"] = false
 	}
@@ -358,6 +406,12 @@ func browserActionsProp() map[string]any {
 			actionObject("goto", []string{"url"}, map[string]any{"url": stringProp("Destination URL."), "wait_until": waitUntil, "timeout_ms": timeout}),
 			actionObject("click", []string{"selector"}, map[string]any{"selector": selector}),
 			actionObject("fill", []string{"selector", "value"}, map[string]any{"selector": selector, "value": stringProp("Replacement input value.")}),
+			actionObject("type", []string{"selector", "text"}, map[string]any{"selector": selector, "text": stringProp("Text to type using real keyboard events without clearing the existing value.")}),
+			actionObject("upload", []string{"selector", "paths"}, map[string]any{"selector": selector, "paths": map[string]any{"type": "array", "minItems": 1, "maxItems": 32, "items": map[string]any{"type": "string"}, "description": "Absolute host file paths assigned to the file input."}}),
+			actionObject("download", []string{"selector"}, map[string]any{"selector": selector, "timeout_ms": timeout}),
+			actionObject("tab_new", nil, map[string]any{"url": stringProp("Initial URL for the new tab. Defaults to about:blank.")}),
+			actionObject("tab_switch", []string{"page_id"}, map[string]any{"page_id": stringProp("CDP page target id to activate and use for following actions.")}),
+			actionObject("tab_close", nil, map[string]any{"page_id": stringProp("CDP page target id to close. Omit to close the current page.")}),
 			actionObject("press", []string{"key"}, map[string]any{"selector": selector, "key": stringProp("Key name or text to send.")}),
 			actionObject("wait", []string{"value"}, map[string]any{"value": intProp("Duration in milliseconds.", 0, 300000)}),
 			actionObject("wait_for_selector", []string{"selector"}, map[string]any{"selector": selector, "state": state, "timeout_ms": timeout}),

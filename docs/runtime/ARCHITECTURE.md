@@ -2,7 +2,7 @@
 
 General = Files, Shell, MCP, Dynamic MCP, Skills, Tasks, Artifacts, optional ACP.
 Coding = Projects, work_on_project, task-bound workspace, Git, validation, closeout.
-Computer = Browser (existing CDP), Desktop (native Windows UI Automation in phase two).
+Computer = Browser (native CDP + optional Runtime Chrome Bridge), Desktop (native Windows UI Automation fallback).
 
 ## One ownership model
 
@@ -66,19 +66,35 @@ future control-plane action, separate from model-declared review readiness.
   WebSocket, reconnect/backoff, tool descriptors and artifact chunk transfer.
   It does not yet supply a coding project inventory or durable command-job
   reconciliation. Add machine/project addressing and inventory to that boundary.
-- Computer: Browser tools remain unchanged. Desktop is implemented under
+- Computer: Browser is now a first-class Runtime layer. Native Go/CDP owns launched
+  Chromium-family sessions and supports tabs, URL/live DOM, click/fill/type/select,
+  upload, waits, screenshots, network response/failure evidence and download
+  Artifacts. `transport=extension` uses the optional Manifest V3 Runtime Chrome
+  Bridge to attach an existing logged-in Chrome tab through `chrome.debugger`,
+  `chrome.tabs`, `chrome.downloads` and Native Messaging without requiring a remote
+  debugging port. Closing an extension session detaches Runtime; it does not close
+  the user's tab. `show_cursor` defaults on and adds a presentation-only glowing
+  pointer; extension sessions additionally mark the working Chrome tab with a
+  temporary `✦ Runtime` title/favicon and, when it was previously ungrouped, a
+  cyan Runtime tab group in the same window. These markers are removed on normal
+  detach and excluded from serialized page semantics. Desktop remains under
   `internal/computer/desktop` for Windows amd64 using native COM UIA and Win32.
-  Semantic window-scoped tree/find/focus/Invoke/Value/Scroll/Toggle/SelectionItem,
-  clipboard and screenshot are available. No pointer/keyboard fallback or macOS
-  implementation is implied. Native actions require an interactive user session;
-  a session-0 system service is not a desktop agent. Priority remains structured
-  API > CLI > accessibility > visual pointer. Screenshot Artifacts reuse the
-  existing publisher and may optionally attach to the existing Coding Task.
+  `browser_act.desktop_fallback` is explicit
+  and semantic: only an operational browser failure may trigger the supplied UIA
+  window/selector/action. CSS is never translated into screen coordinates and there
+  is no silent pointer fallback. Priority remains structured API > CDP/DOM >
+  accessibility > visual pointer. Browser/Desktop screenshots and downloads reuse
+  the existing Artifact publisher.
 - Plugins: Dynamic MCP remains the external ecosystem. A runner-local executable
   adapter is justified only by a real capability not well expressed through MCP.
 
-ACP/Codex is intelligence transport only and never a Coding dependency. This
-foundation must function with ACP disabled and without any model/backend calls.
+ACP/Codex is intelligence transport only and never a Coding dependency. Runtime
+exposes `acp_start`, `acp_resume`, `acp_status`, `acp_stop` through a lazy multi-agent
+adapter registry; `acp_status` may discover adapters without launching them and
+`default_active` is always false. Codex is the high-level default, with Claude/Grok
+presets and an explicit-command path for other ACP agents. The legacy configured
+ACP surface remains compatibility-only behind its old switch. Coding and Computer
+must function without any model/backend process.
 
 ## Evidence and preview boundaries
 

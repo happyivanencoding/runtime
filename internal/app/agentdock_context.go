@@ -46,13 +46,15 @@ func (r *Runtime) agentDockContext(ctx context.Context, nexusLocalOnly bool) (Re
 		contextResult.Warnings = append(contextResult.Warnings, capabilityWarning{Source: "skills", Message: "Skill 索引暂不可用。"})
 	}
 
+	acpAgent := "codex"
 	if requiresACP(r.cfg) {
-		contextResult.ACP = &capabilityACPContext{
-			Enabled: true,
-			Agent:   r.cfg.ACPAgentName,
-			Description: "本机 Coding Agent 通道（Agent Client Protocol）。仅当用户明确要求时使用，可用来获取独特见解与编排任务；" +
-				"不是动态 MCP，不要用 mcp_tool_*。",
-		}
+		acpAgent = r.cfg.ACPAgentName
+	}
+	contextResult.ACP = &capabilityACPContext{
+		Enabled: true,
+		Agent:   acpAgent,
+		Description: "本机可选 Coding Agent 通道（Agent Client Protocol）。默认不启动；仅当用户明确要求 ACP/另一 Agent 时使用，可用于独立上下文、A/B、Player/Judge/Reviewer 或产品自身依赖的 ACP；" +
+			"不是动态 MCP，不要用 mcp_tool_*。",
 	}
 
 	if requiresNexus(r.cfg) && !nexusLocalOnly {

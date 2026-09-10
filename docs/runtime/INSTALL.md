@@ -13,12 +13,12 @@ ChatGPT 网页版已有 AgentDock 连接
   -> AgentDock 的 mcp_tool_search / inspect / call
   -> runtime-core-preview
   -> 本机 runtime-core.exe
-  -> 原生 Coding / LSP / Windows UI Automation
+  -> 原生 Coding / LSP / Browser / Windows UI Automation / 可选 ACP Adapter
 ```
 
-本轮已通过这条路径读取真实源码符号、输入中文、触发测试窗口按钮并取回截图。
-因此当前不需要另建 GPT、自定义 GPT Action、Chrome 扩展或一套新的插件协议。
-这个外层转发是过渡接入方式，不是 Runtime 核心对旧 AgentDock 的永久依赖。
+第三阶段还加入了 Runtime Chrome Bridge；它属于 Browser 的可选 transport，不是另一套插件协议。
+正常 Runtime Browser 默认使用原生 CDP；需要控制用户已登录的真实 Chrome tab 时再选择
+`transport=extension`。这个外层 AgentDock 转发仍只是过渡接入方式，不是 Runtime 核心对旧 AgentDock 的永久依赖。
 
 以后可直接在对话中要求：
 
@@ -39,7 +39,7 @@ Desktop 操作先调用 desktop_inspect 获取当前 window_handle 和真实语�
 ```powershell
 Set-Location C:\dev\runtime-core
 $go = 'C:\dev\_tools\go1.26.5\go\bin\go.exe'
-$binary = 'C:\dev\runtime-core-artifacts\phase2\runtime-core.exe'
+$binary = 'C:\dev\runtime-core-artifacts\phase3\runtime-core.exe'
 & $go build -trimpath -o $binary ./cmd/agentdock
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 
@@ -49,9 +49,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
   -ProjectRoot 'C:\dev\runtime-core'
 ```
 
-安装器只复制到 `%LOCALAPPDATA%\RuntimeCore`，保留上一份已安装 binary 为
-`bin\runtime-core.previous.exe`，不动项目登记、任务或 LSP 配置，不创建系统服务。
-目标进程仍在运行时它会报错，不会擅自杀进程。安装后重新启用自己的 Dynamic MCP。
+安装器复制到 `%LOCALAPPDATA%\RuntimeCore`，保留上一份已安装 binary 为
+`bin\runtime-core.previous.exe`，并同步 `chrome-extension`、生成 Native Messaging host manifest、
+在当前用户 HKCU 注册 `com.runtime.browser_bridge`。它不动项目登记、任务或 LSP 配置，也不创建系统服务。
+目标 Runtime 进程仍在运行时它会报错，不会擅自杀进程。安装后重新启用自己的 Dynamic MCP。
 
 从交付包安装时，保留包内 `scripts/runtime` 目录结构，把上面 Binary 参数改为
 解压目录中的 `runtime-core.exe`。这里的安装不需要管理员权限。
@@ -72,6 +73,7 @@ isolated environment:
 AGENTDOCK_HOME=C:\dev\runtime-core-state
 AGENTDOCK_DEFAULT_DIR=C:\dev\runtime-core
 AGENTDOCK_ACP_ENABLED=false
+AGENTDOCK_BROWSER_ENABLED=true
 ```
 
 路径中的用户目录应替换为新机器真实的 `%LOCALAPPDATA%`。AgentDock registry 的
@@ -80,6 +82,22 @@ command 字段使用绝对路径，不假设会展开 `%LOCALAPPDATA%` 文本。
 
 官方 AgentDock 的安装/登录方式决定外层连接如何随电脑启动恢复。这一轮没有
 新建 Runtime 独立开机任务，也没有修改官方托盘启动设置。
+
+## Runtime Chrome Bridge
+
+安装器已经把扩展复制到：
+
+```text
+%LOCALAPPDATA%\RuntimeCore\chrome-extension
+```
+
+并注册 Native Messaging host。Chrome 对本机未上架 unpacked extension 的首次持久加载需要浏览器确认：
+打开 `chrome://extensions`，启用 Developer mode，选择 **Load unpacked**，指向上面的目录。
+固定 Extension ID 为 `agidgjchdiodbkkaggifpflepjgoedff`；不要重新生成 manifest key，否则 Native Messaging allowed origin 会失配。
+
+扩展加载后，`browser_session {action:"extension_status"}` 可以只检查连接；需要复用当前已登录 Chrome 时，
+使用 `browser_session {action:"start", transport:"extension"}`。`show_cursor` 默认开启：页面内会显示青色发光光标，当前 Runtime 工作 tab 会临时显示 `✦ Runtime ·` 标题/发光 favicon，并在原本未分组时加入同一窗口的青色 `Runtime` 标签组；关闭 session 后自动恢复。已有用户标签组不会被替换。可用 `show_cursor:false` 关闭这些视觉标识。
+不需要复用登录态时优先使用默认 native CDP transport。
 
 ## 新机器首次安装语言服务器
 

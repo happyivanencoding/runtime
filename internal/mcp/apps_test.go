@@ -139,6 +139,7 @@ func TestMCPAppsBindResourcesDirectlyToBusinessTools(t *testing.T) {
 		AgentDockDefaultDir: root,
 		AgentDockHome:       filepath.Join(root, ".agentdock"),
 		OAuthServerURL:      widgetDomain + "/",
+		BrowserEnabled:      true,
 	})
 
 	initialize := harness.session.InitializeResult()
@@ -153,8 +154,15 @@ func TestMCPAppsBindResourcesDirectlyToBusinessTools(t *testing.T) {
 		}
 		tools[tool.Name] = tool
 	}
-	if len(tools) != 16 {
-		t.Fatalf("tools/list count = %d, want 16", len(tools))
+	for _, name := range []string{"project_registry", "work_on_project", "git_status", "lsp_manage", "desktop_inspect", "browser_session", "acp_start", "acp_status"} {
+		if tools[name] == nil {
+			t.Fatalf("Runtime tool %s missing from tools/list", name)
+		}
+	}
+	for _, name := range []string{"acp_session", "acp_prompt", "acp_interaction"} {
+		if tools[name] != nil {
+			t.Fatalf("legacy configured ACP tool %s should remain hidden while ACP config is disabled", name)
+		}
 	}
 	contextTool := tools["agentdock_context"]
 	if contextTool == nil {
@@ -574,8 +582,10 @@ func TestMCPAppsExposeACPViewOnlyWhenACPEnabled(t *testing.T) {
 		}
 		tools[tool.Name] = tool
 	}
-	if len(tools) != 19 {
-		t.Fatalf("tools/list count = %d, want 19", len(tools))
+	for _, name := range []string{"acp_start", "acp_resume", "acp_status", "acp_stop", "acp_session", "acp_prompt", "acp_interaction"} {
+		if tools[name] == nil {
+			t.Fatalf("ACP tool %s missing while configured ACP compatibility mode is enabled", name)
+		}
 	}
 	assertToolUIResource(t, tools["acp_session"], protocol.ACPStatusUIResourceURI)
 	for _, name := range []string{"acp_prompt", "acp_interaction"} {

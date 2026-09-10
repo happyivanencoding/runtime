@@ -182,7 +182,7 @@ func TestBrowserActionSchemaIsStrictPerAction(t *testing.T) {
 	actions := InputSchema("browser_act")["properties"].(map[string]any)["actions"].(map[string]any)
 	items := actions["items"].(map[string]any)
 	branches, ok := items["oneOf"].([]map[string]any)
-	if !ok || len(branches) != 14 {
+	if !ok || len(branches) != 20 {
 		t.Fatalf("browser action oneOf = %#v", items["oneOf"])
 	}
 	seen := map[string]map[string]any{}
@@ -194,7 +194,7 @@ func TestBrowserActionSchemaIsStrictPerAction(t *testing.T) {
 		action := properties["action"].(map[string]any)["const"].(string)
 		seen[action] = properties
 	}
-	for _, action := range []string{"wait_for_url", "wait_for_text", "wait_for_response", "reload", "back", "forward"} {
+	for _, action := range []string{"type", "upload", "download", "tab_new", "tab_switch", "tab_close", "wait_for_url", "wait_for_text", "wait_for_response", "reload", "back", "forward"} {
 		if seen[action] == nil {
 			t.Fatalf("browser action schema missing %s", action)
 		}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/uvwt/agentdock/cmd/agentdock/internal/logx"
 	"github.com/uvwt/agentdock/internal/app"
+	"github.com/uvwt/agentdock/internal/browserbridge"
 	"github.com/uvwt/agentdock/internal/buildinfo"
 	"github.com/uvwt/agentdock/internal/config"
 	"github.com/uvwt/agentdock/internal/desktopcontrol"
@@ -38,6 +39,12 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	// Chrome Native Messaging launches the configured host binary directly and
+	// passes the extension origin as argv[1]. Handle that binary protocol before
+	// ordinary CLI parsing; stdout must contain framed native messages only.
+	if len(args) > 0 && strings.HasPrefix(args[0], "chrome-extension://") {
+		return browserbridge.RunNativeHost(ctx, args[0], os.Stdin, stdout, stderr)
+	}
 	// runtime-core: official binary update helpers are not fork maintenance.
 	if len(args) == 1 && args[0] == "--version" {
 		printVersion(stdout)

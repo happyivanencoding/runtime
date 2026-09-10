@@ -1,0 +1,21 @@
+body {
+  margin: 0;
+  width: 340px;
+  background: #f7f8fa;
+  color: #172033;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { padding: 16px; }
+.title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+h1 { margin: 0; font-size: 16px; font-weight: 650; }
+p { margin: 3px 0 0; color: #667085; }
+.badge { border: 1px solid #d0d5dd; border-radius: 5px; padding: 3px 7px; background: white; font-size: 12px; white-space: nowrap; }
+.badge.ok { border-color: #75b798; color: #146c43; background: #eef9f2; }
+.badge.off { border-color: #e3a6a6; color: #842029; background: #fff1f2; }
+section { margin-top: 14px; padding: 11px 12px; border: 1px solid #dfe3e8; border-radius: 7px; background: white; }
+.label { display: block; color: #667085; font-size: 11px; margin-bottom: 4px; }
+code { display: block; overflow-wrap: anywhere; color: #344054; font-size: 11px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid div + div { border-left: 1px solid #e8eaed; padding-left: 12px; }
+strong { font-size: 18px; font-weight: 650; }
+.detail { margin-top: 12px; font-size: 12px; }

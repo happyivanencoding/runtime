@@ -11,6 +11,9 @@ import (
 )
 
 func (s *Service) Snapshot(ctx context.Context, req SnapshotRequest) (Snapshot, error) {
+	if extension, ok := s.getExtensionSession(req.SessionID); ok {
+		return s.extensionSnapshot(ctx, extension, req)
+	}
 	sess, err := s.getSession(req.SessionID)
 	if err != nil {
 		return Snapshot{}, err
@@ -36,8 +39,8 @@ func (s *Service) Snapshot(ctx context.Context, req SnapshotRequest) (Snapshot, 
 	if err := diag.enable(operationCtx, pageCtx); err != nil {
 		return Snapshot{}, classifyOperationError(err, "snapshot")
 	}
-	consoleErrors, networkErrors, pageErrors := diag.snapshot()
-	snapshot, err := s.snapshotLocked(operationCtx, sess, req, consoleErrors, networkErrors, pageErrors)
+	consoleErrors, networkEvents, networkErrors, pageErrors := diag.snapshot()
+	snapshot, err := s.snapshotLocked(operationCtx, sess, req, consoleErrors, networkEvents, networkErrors, pageErrors, nil)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -51,7 +54,7 @@ func (s *Service) Snapshot(ctx context.Context, req SnapshotRequest) (Snapshot, 
 	return snapshot, nil
 }
 
-func (s *Service) snapshotLocked(ctx context.Context, sess *session, req SnapshotRequest, consoleErrors []ConsoleError, networkErrors []NetworkError, pageErrors []PageError) (Snapshot, error) {
+func (s *Service) snapshotLocked(ctx context.Context, sess *session, req SnapshotRequest, consoleErrors []ConsoleError, networkEvents []NetworkEvent, networkErrors []NetworkError, pageErrors []PageError, downloads []Download) (Snapshot, error) {
 	pageID, err := sess.selectPage(req.PageID)
 	if err != nil {
 		return Snapshot{}, err
@@ -68,6 +71,13 @@ func (s *Service) snapshotLocked(ctx context.Context, sess *session, req Snapsho
 	if maxText > 50000 {
 		maxText = 50000
 	}
+	maxDOM := req.MaxDOMChars
+	if maxDOM <= 0 {
+		maxDOM = 20000
+	}
+	if maxDOM > 200000 {
+		maxDOM = 200000
+	}
 	maxInteractive := req.MaxInteractiveElements
 	if maxInteractive <= 0 {
 		maxInteractive = 40
@@ -82,6 +92,7 @@ func (s *Service) snapshotLocked(ctx context.Context, sess *session, req Snapsho
 		return Snapshot{}, classifyOperationError(err, "snapshot")
 	}
 	state.Text = truncateRunes(state.Text, maxText)
+	state.DOM = truncateRunes(state.DOM, maxDOM)
 
 	var viewportWidth, viewportHeight int
 	var pageWidth, pageHeight int
@@ -135,13 +146,16 @@ func (s *Service) snapshotLocked(ctx context.Context, sess *session, req Snapsho
 		URL:                 state.URL,
 		Title:               state.Title,
 		Text:                state.Text,
+		DOM:                 state.DOM,
 		Viewport:            Viewport{Width: viewportWidth, Height: viewportHeight},
 		PageSize:            Size{Width: pageWidth, Height: pageHeight},
 		FocusedElement:      state.FocusedElement,
 		InteractiveElements: state.InteractiveElements,
 		ConsoleErrors:       nonNilConsole(consoleErrors),
+		NetworkEvents:       nonNilNetworkEvents(networkEvents),
 		NetworkErrors:       nonNilNetwork(networkErrors),
 		PageErrors:          nonNilPage(pageErrors),
+		Downloads:           nonNilDownloads(downloads),
 		PNG:                 png,
 	}, nil
 }
@@ -150,6 +164,7 @@ type domSnapshot struct {
 	URL                 string               `json:"url"`
 	Title               string               `json:"title"`
 	Text                string               `json:"text"`
+	DOM                 string               `json:"dom"`
 	Viewport            Viewport             `json:"viewport"`
 	PageSize            Size                 `json:"page_size"`
 	FocusedElement      *FocusedElement      `json:"focused_element"`
@@ -187,8 +202,9 @@ const interactive=candidates.filter(visible).slice(0,%d).map(el => ({
   aria_name:el.getAttribute('aria-label')||'', href:el.href||'', selector:selectorFor(el)
 }));
 const doc=document.documentElement; const body=document.body;
+const cleanDOM=()=>{ if(!document.documentElement)return ''; const clone=document.documentElement.cloneNode(true); clone.querySelector('#__runtime_visual_cursor')?.remove(); clone.querySelector('#__runtime_visual_cursor_style')?.remove(); return clone.outerHTML; };
 return {
-  url:location.href, title:document.title, text:norm(body ? body.innerText : ''),
+  url:location.href, title:document.title, text:norm(body ? body.innerText : ''), dom:cleanDOM(),
   viewport:{width:window.innerWidth,height:window.innerHeight},
   page_size:{width:Math.max(doc?.scrollWidth||0,body?.scrollWidth||0,window.innerWidth),height:Math.max(doc?.scrollHeight||0,body?.scrollHeight||0,window.innerHeight)},
   focused_element:describe(document.activeElement), interactive_elements:interactive
@@ -211,6 +227,13 @@ func nonNilConsole(values []ConsoleError) []ConsoleError {
 	return values
 }
 
+func nonNilNetworkEvents(values []NetworkEvent) []NetworkEvent {
+	if values == nil {
+		return []NetworkEvent{}
+	}
+	return values
+}
+
 func nonNilNetwork(values []NetworkError) []NetworkError {
 	if values == nil {
 		return []NetworkError{}
@@ -221,6 +244,13 @@ func nonNilNetwork(values []NetworkError) []NetworkError {
 func nonNilPage(values []PageError) []PageError {
 	if values == nil {
 		return []PageError{}
+	}
+	return values
+}
+
+func nonNilDownloads(values []Download) []Download {
+	if values == nil {
+		return []Download{}
 	}
 	return values
 }

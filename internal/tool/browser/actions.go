@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
+	cdpbrowser "github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
@@ -16,6 +20,9 @@ import (
 )
 
 func (s *Service) Act(ctx context.Context, req ActRequest) (Snapshot, error) {
+	if extension, ok := s.getExtensionSession(req.SessionID); ok {
+		return s.extensionAct(ctx, extension, req)
+	}
 	sess, err := s.getSession(req.SessionID)
 	if err != nil {
 		return Snapshot{}, err
@@ -62,12 +69,56 @@ func (s *Service) Act(ctx context.Context, req ActRequest) (Snapshot, error) {
 	if _, err := pageContext(currentPage); err != nil {
 		return Snapshot{}, err
 	}
+	downloads := []Download{}
 	for index, action := range req.Actions {
+		if action.Kind == "tab_new" {
+			created, err := sess.createPage(operationCtx, action.TabNew.URL)
+			if err != nil {
+				return Snapshot{}, wrapActionError(err, index, action.Kind)
+			}
+			currentPage = created
+			requestedPageID = ""
+			continue
+		}
+		if action.Kind == "tab_switch" {
+			switched, err := sess.activatePage(operationCtx, action.TabSwitch.PageID)
+			if err != nil {
+				return Snapshot{}, wrapActionError(err, index, action.Kind)
+			}
+			currentPage = switched
+			requestedPageID = action.TabSwitch.PageID
+			continue
+		}
+		if action.Kind == "tab_close" {
+			closed := action.TabClose.PageID
+			if strings.TrimSpace(closed) == "" {
+				closed = string(currentPage)
+			}
+			if err := sess.closePage(operationCtx, closed); err != nil {
+				return Snapshot{}, wrapActionError(err, index, action.Kind)
+			}
+			requestedPageID = ""
+			next, err := sess.selectPage("")
+			if err != nil {
+				return Snapshot{}, wrapActionError(err, index, action.Kind)
+			}
+			currentPage = next
+			continue
+		}
 		pageCtx, err := pageContext(currentPage)
 		if err != nil {
 			return Snapshot{}, err
 		}
-		if err := runAction(operationCtx, pageCtx, diag, action); err != nil {
+		if action.Kind == "download" {
+			if sess.showCursor {
+				_ = moveVisualCursor(operationCtx, pageCtx, action.Download.Selector, true)
+			}
+			download, err := downloadBySelector(operationCtx, pageCtx, sess.downloadDir, *action.Download)
+			if err != nil {
+				return Snapshot{}, wrapActionError(err, index, action.Kind)
+			}
+			downloads = append(downloads, download)
+		} else if err := runAction(operationCtx, pageCtx, diag, action, sess.showCursor); err != nil {
 			return Snapshot{}, wrapActionError(err, index, action.Kind)
 		}
 		if err := sess.refreshPages(); err != nil {
@@ -84,15 +135,16 @@ func (s *Service) Act(ctx context.Context, req ActRequest) (Snapshot, error) {
 		}
 	}
 
-	consoleErrors, networkErrors, pageErrors := diag.snapshot()
+	consoleErrors, networkEvents, networkErrors, pageErrors := diag.snapshot()
 	snapshot, err := s.snapshotLocked(operationCtx, sess, SnapshotRequest{
 		SessionID:              req.SessionID,
 		PageID:                 string(currentPage),
 		FullPage:               req.FullPage,
 		MaxTextChars:           req.MaxTextChars,
+		MaxDOMChars:            req.MaxDOMChars,
 		MaxInteractiveElements: req.MaxInteractiveElements,
 		Timeout:                req.Timeout,
-	}, consoleErrors, networkErrors, pageErrors)
+	}, consoleErrors, networkEvents, networkErrors, pageErrors, downloads)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -106,7 +158,7 @@ func (s *Service) Act(ctx context.Context, req ActRequest) (Snapshot, error) {
 	return snapshot, nil
 }
 
-func runAction(parent, pageCtx context.Context, diag *diagnostics, action Action) error {
+func runAction(parent, pageCtx context.Context, diag *diagnostics, action Action, showCursor bool) error {
 	switch action.Kind {
 	case "goto":
 		a := action.Goto
@@ -115,11 +167,30 @@ func runAction(parent, pageCtx context.Context, diag *diagnostics, action Action
 			return err
 		})
 	case "click":
+		if showCursor {
+			_ = moveVisualCursor(parent, pageCtx, action.Click.Selector, true)
+		}
 		return runWithContext(parent, pageCtx, chromedp.Click(action.Click.Selector, chromedp.ByQuery))
 	case "fill":
+		if showCursor {
+			_ = moveVisualCursor(parent, pageCtx, action.Fill.Selector, false)
+		}
 		return fillValue(parent, pageCtx, *action.Fill)
+	case "type":
+		if showCursor {
+			_ = moveVisualCursor(parent, pageCtx, action.Type.Selector, false)
+		}
+		return typeText(parent, pageCtx, *action.Type)
+	case "upload":
+		if showCursor {
+			_ = moveVisualCursor(parent, pageCtx, action.Upload.Selector, false)
+		}
+		return uploadFiles(parent, pageCtx, *action.Upload)
 	case "press":
 		a := action.Press
+		if showCursor && a.Selector != "" {
+			_ = moveVisualCursor(parent, pageCtx, a.Selector, false)
+		}
 		tasks := chromedp.Tasks{}
 		if a.Selector != "" {
 			tasks = append(tasks, chromedp.Focus(a.Selector, chromedp.ByQuery))
@@ -137,6 +208,9 @@ func runAction(parent, pageCtx context.Context, diag *diagnostics, action Action
 	case "wait_for_response":
 		return waitForResponse(parent, diag, *action.WaitResponse)
 	case "select":
+		if showCursor {
+			_ = moveVisualCursor(parent, pageCtx, action.Select.Selector, false)
+		}
 		return selectValue(parent, pageCtx, *action.Select)
 	case "scroll":
 		return scrollBy(parent, pageCtx, *action.Scroll)
@@ -313,6 +387,119 @@ func fillValue(parent, pageCtx context.Context, action FillAction) error {
 		return browserError(ErrActionFailed, "browser fill target is not editable", "action", &ErrorDetails{Selector: action.Selector, Reason: result.Reason}, nil)
 	}
 	return nil
+}
+
+func typeText(parent, pageCtx context.Context, action TypeAction) error {
+	if strings.TrimSpace(action.Selector) == "" {
+		return browserError(ErrActionInvalid, "browser type requires a CSS selector", "validation", nil, nil)
+	}
+	return runWithContext(parent, pageCtx, chromedp.SendKeys(action.Selector, action.Text, chromedp.ByQuery))
+}
+
+func uploadFiles(parent, pageCtx context.Context, action UploadAction) error {
+	if strings.TrimSpace(action.Selector) == "" || len(action.Paths) == 0 {
+		return browserError(ErrActionInvalid, "browser upload requires a CSS selector and at least one file", "validation", nil, nil)
+	}
+	paths := make([]string, 0, len(action.Paths))
+	for _, path := range action.Paths {
+		path = filepath.Clean(strings.TrimSpace(path))
+		if path == "." || !filepath.IsAbs(path) {
+			return browserError(ErrActionInvalid, "browser upload file paths must be absolute", "validation", &ErrorDetails{Path: path}, nil)
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return browserError(ErrActionInvalid, "browser upload file was not found", "validation", &ErrorDetails{Path: path}, err)
+		}
+		paths = append(paths, path)
+	}
+	return runWithContext(parent, pageCtx, chromedp.SetUploadFiles(action.Selector, paths, chromedp.ByQuery))
+}
+
+func downloadBySelector(parent, pageCtx context.Context, downloadDir string, action DownloadAction) (Download, error) {
+	if strings.TrimSpace(action.Selector) == "" {
+		return Download{}, browserError(ErrActionInvalid, "browser download requires a CSS selector", "validation", nil, nil)
+	}
+	if strings.TrimSpace(downloadDir) == "" {
+		return Download{}, browserError(ErrActionFailed, "browser download directory is unavailable", "download", nil, nil)
+	}
+	if err := os.MkdirAll(downloadDir, 0o700); err != nil {
+		return Download{}, browserError(ErrActionFailed, "create browser download directory", "download", &ErrorDetails{Path: downloadDir}, err)
+	}
+	timeout := action.Timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := operationContext(parent, pageCtx, timeout)
+	defer cancel()
+	listenCtx, listenCancel := context.WithCancel(pageCtx)
+	defer listenCancel()
+
+	var mu sync.Mutex
+	downloads := map[string]Download{}
+	done := make(chan Download, 1)
+	chromedp.ListenTarget(listenCtx, func(value any) {
+		switch event := value.(type) {
+		case *cdpbrowser.EventDownloadWillBegin:
+			mu.Lock()
+			downloads[event.GUID] = Download{
+				GUID: event.GUID, URL: event.URL, SuggestedFilename: event.SuggestedFilename, State: "in_progress",
+			}
+			mu.Unlock()
+		case *cdpbrowser.EventDownloadProgress:
+			mu.Lock()
+			download := downloads[event.GUID]
+			download.GUID = event.GUID
+			download.ReceivedBytes = event.ReceivedBytes
+			download.TotalBytes = event.TotalBytes
+			download.State = string(event.State)
+			download.Path = strings.TrimSpace(event.FilePath)
+			if download.Path == "" && event.State == cdpbrowser.DownloadProgressStateCompleted {
+				candidate := filepath.Join(downloadDir, event.GUID)
+				if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+					download.Path = candidate
+				}
+			}
+			downloads[event.GUID] = download
+			terminal := event.State == cdpbrowser.DownloadProgressStateCompleted || event.State == cdpbrowser.DownloadProgressStateCanceled
+			mu.Unlock()
+			if terminal {
+				select {
+				case done <- download:
+				default:
+				}
+			}
+		}
+	})
+
+	if err := runWithContext(ctx, pageCtx,
+		cdpbrowser.SetDownloadBehavior(cdpbrowser.SetDownloadBehaviorBehaviorAllowAndName).WithDownloadPath(downloadDir).WithEventsEnabled(true),
+		chromedp.Click(action.Selector, chromedp.ByQuery),
+	); err != nil {
+		return Download{}, err
+	}
+	select {
+	case download := <-done:
+		if download.State != string(cdpbrowser.DownloadProgressStateCompleted) {
+			return Download{}, browserError(ErrActionFailed, "browser download was cancelled", "download", &ErrorDetails{URL: download.URL}, nil)
+		}
+		if download.Path != "" && download.SuggestedFilename != "" {
+			safeName := filepath.Base(strings.TrimSpace(download.SuggestedFilename))
+			if safeName != "" && safeName != "." && safeName != string(filepath.Separator) {
+				targetPath := filepath.Join(downloadDir, safeName)
+				if !strings.EqualFold(filepath.Clean(download.Path), filepath.Clean(targetPath)) {
+					if _, err := os.Stat(targetPath); err == nil {
+						targetPath = filepath.Join(downloadDir, download.GUID+"-"+safeName)
+					}
+					if err := os.Rename(download.Path, targetPath); err == nil {
+						download.Path = targetPath
+					}
+				}
+			}
+		}
+		return download, nil
+	case <-ctx.Done():
+		return Download{}, browserError(ErrTimeout, "timed out waiting for browser download", "download", &ErrorDetails{Selector: action.Selector}, ctx.Err())
+	}
 }
 
 func selectValue(parent, pageCtx context.Context, action SelectAction) error {

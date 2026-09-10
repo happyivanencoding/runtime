@@ -56,6 +56,9 @@ type Cookie struct {
 }
 
 type StartRequest struct {
+	Transport               string
+	TabID                   int
+	ShowCursor              bool
 	URL                     string
 	Browser                 Kind
 	Headless                bool
@@ -83,6 +86,7 @@ type ActRequest struct {
 	CloseAfter             bool
 	FullPage               bool
 	MaxTextChars           int
+	MaxDOMChars            int
 	MaxInteractiveElements int
 	Timeout                time.Duration
 }
@@ -93,6 +97,7 @@ type SnapshotRequest struct {
 	CloseAfter             bool
 	FullPage               bool
 	MaxTextChars           int
+	MaxDOMChars            int
 	MaxInteractiveElements int
 	Timeout                time.Duration
 }
@@ -102,6 +107,12 @@ type Action struct {
 	Goto         *GotoAction
 	Click        *ClickAction
 	Fill         *FillAction
+	Type         *TypeAction
+	Upload       *UploadAction
+	Download     *DownloadAction
+	TabNew       *TabNewAction
+	TabSwitch    *TabSwitchAction
+	TabClose     *TabCloseAction
 	Press        *PressAction
 	Wait         *WaitAction
 	WaitSelector *WaitSelectorAction
@@ -125,6 +136,27 @@ type FillAction struct {
 	Selector string
 	Value    string
 }
+
+type TypeAction struct {
+	Selector string
+	Text     string
+}
+
+type UploadAction struct {
+	Selector string
+	Paths    []string
+}
+
+type DownloadAction struct {
+	Selector string
+	Timeout  time.Duration
+}
+
+type TabNewAction struct{ URL string }
+
+type TabSwitchAction struct{ PageID string }
+
+type TabCloseAction struct{ PageID string }
 
 type PressAction struct {
 	Selector string
@@ -212,6 +244,24 @@ type NetworkError struct {
 	ErrorText string `json:"error_text"`
 }
 
+type NetworkEvent struct {
+	URL          string `json:"url"`
+	Method       string `json:"method,omitempty"`
+	Status       int    `json:"status,omitempty"`
+	MimeType     string `json:"mime_type,omitempty"`
+	ResourceType string `json:"resource_type,omitempty"`
+}
+
+type Download struct {
+	GUID              string  `json:"guid"`
+	URL               string  `json:"url"`
+	SuggestedFilename string  `json:"suggested_filename"`
+	Path              string  `json:"path,omitempty"`
+	State             string  `json:"state"`
+	ReceivedBytes     float64 `json:"received_bytes,omitempty"`
+	TotalBytes        float64 `json:"total_bytes,omitempty"`
+}
+
 type PageError struct {
 	Message string `json:"message"`
 }
@@ -223,13 +273,16 @@ type Snapshot struct {
 	URL                 string               `json:"url"`
 	Title               string               `json:"title"`
 	Text                string               `json:"text"`
+	DOM                 string               `json:"dom"`
 	Viewport            Viewport             `json:"viewport"`
 	PageSize            Size                 `json:"page_size"`
 	FocusedElement      *FocusedElement      `json:"focused_element,omitempty"`
 	InteractiveElements []InteractiveElement `json:"interactive_elements"`
 	ConsoleErrors       []ConsoleError       `json:"console_errors"`
+	NetworkEvents       []NetworkEvent       `json:"network_events"`
 	NetworkErrors       []NetworkError       `json:"network_errors"`
 	PageErrors          []PageError          `json:"page_errors"`
+	Downloads           []Download           `json:"downloads"`
 	PNG                 []byte               `json:"-"`
 }
 
@@ -288,5 +341,16 @@ type session struct {
 	pageContexts map[target.ID]*pageContext
 	activePage   target.ID
 	pageOrder    uint64
+	downloadDir  string
+	showCursor   bool
 	closed       bool
+}
+
+type extensionSession struct {
+	opMu         sync.Mutex
+	id           string
+	tabID        int
+	showCursor   bool
+	createdAt    time.Time
+	lastActivity time.Time
 }

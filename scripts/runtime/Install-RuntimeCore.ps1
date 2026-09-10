@@ -37,6 +37,29 @@ foreach ($name in @('Start-RuntimeCore.ps1', 'Install-LanguageServers.ps1')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $InstallDir 'scripts') -Force
 }
 $sourceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$extensionId = 'agidgjchdiodbkkaggifpflepjgoedff'
+$extensionSource = Join-Path $sourceRoot 'extensions\runtime-chrome'
+$extensionTarget = Join-Path $InstallDir 'chrome-extension'
+if (-not (Test-Path -LiteralPath (Join-Path $extensionSource 'manifest.json'))) {
+    throw "Runtime Chrome Bridge source is missing: $extensionSource"
+}
+New-Item -ItemType Directory -Force $extensionTarget | Out-Null
+Get-ChildItem -LiteralPath $extensionTarget -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+Copy-Item -Path (Join-Path $extensionSource '*') -Destination $extensionTarget -Recurse -Force
+
+$nativeHostManifest = Join-Path $InstallDir 'chrome-native-host.json'
+$nativeHost = [ordered]@{
+    name = 'com.runtime.browser_bridge'
+    description = 'Runtime Chrome Bridge native messaging host'
+    path = $target
+    type = 'stdio'
+    allowed_origins = @("chrome-extension://$extensionId/")
+}
+[IO.File]::WriteAllText($nativeHostManifest, ($nativeHost | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
+$nativeHostRegistry = 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.runtime.browser_bridge'
+New-Item -Path $nativeHostRegistry -Force | Out-Null
+Set-Item -Path $nativeHostRegistry -Value $nativeHostManifest
+
 foreach ($name in @('LICENSE', 'NOTICE')) {
     $path = Join-Path $sourceRoot $name
     if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination $InstallDir -Force }
@@ -45,6 +68,9 @@ $settings = [ordered]@{
     runtime_home = $RuntimeHome
     project_root = $ProjectRoot
     binary = $target
+    chrome_extension_path = $extensionTarget
+    chrome_extension_id = $extensionId
+    chrome_native_host_manifest = $nativeHostManifest
     build = $version
 }
 [IO.File]::WriteAllText($settingsPath, ($settings | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
@@ -53,6 +79,9 @@ $settings = [ordered]@{
     runtime_home = $RuntimeHome
     version = $version
     stdio_launcher = (Join-Path $InstallDir 'scripts\Start-RuntimeCore.ps1')
+    chrome_extension_path = $extensionTarget
+    chrome_extension_id = $extensionId
+    chrome_native_host_registered = $true
     service_installed = $false
     official_agentdock_modified = $false
 } | ConvertTo-Json -Depth 8

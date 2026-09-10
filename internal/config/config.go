@@ -64,7 +64,7 @@ func FromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	browserEnabled, err := getenvBool("AGENTDOCK_BROWSER_ENABLED", false)
+	browserEnabled, err := getenvBool("AGENTDOCK_BROWSER_ENABLED", true)
 	if err != nil {
 		return Config{}, err
 	}

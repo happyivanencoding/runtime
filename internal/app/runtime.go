@@ -55,6 +55,7 @@ type Runtime struct {
 	evolution       *evolution.Service
 	taskTools       *tooltask.Service
 	acp             *toolacp.Service
+	acpAdapters     *toolacp.AdapterService
 	lifecycleMu     sync.RWMutex
 	commandCtx      context.Context
 	commandCancel   context.CancelFunc
@@ -106,6 +107,8 @@ func NewRuntime(cfg config.Config) (*Runtime, error) {
 		_ = runtime.Close()
 		return nil, err
 	}
+	acpRegistry := acpruntime.NewAdapterRegistry(cfg.AgentDockHome, cfg.AgentDockDefaultDir, cfg.ACPMaxPrompts, time.Duration(cfg.ACPInteractionMS)*time.Millisecond)
+	runtime.acpAdapters = toolacp.NewAdapterService(acpRegistry)
 	if cfg.ACPEnabled {
 		acpEnvironment := make(map[string]string, len(cfg.ACPEnvFromEnv))
 		for childName, hostName := range cfg.ACPEnvFromEnv {
@@ -116,15 +119,9 @@ func NewRuntime(cfg config.Config) (*Runtime, error) {
 			}
 			acpEnvironment[childName] = value
 		}
-		manager, err := acpruntime.NewManager(acpruntime.Options{
-			Home:       cfg.AgentDockHome,
-			DefaultCWD: cfg.AgentDockDefaultDir,
-			Agent: acpruntime.AgentSpec{
-				Name: cfg.ACPAgentName, Command: cfg.ACPCommand, Args: append([]string(nil), cfg.ACPArgs...), Environment: acpEnvironment,
-			},
-			MaxConcurrentRuns:  cfg.ACPMaxPrompts,
-			InteractionTimeout: time.Duration(cfg.ACPInteractionMS) * time.Millisecond,
-		})
+		manager, _, err := acpRegistry.ManagerWithSpec(acpruntime.AgentSpec{
+			Name: cfg.ACPAgentName, Command: cfg.ACPCommand, Args: append([]string(nil), cfg.ACPArgs...), Environment: acpEnvironment,
+		}, "legacy_config")
 		if err != nil {
 			_ = runtime.Close()
 			return nil, fmt.Errorf("initialize ACP runtime: %w", err)
@@ -163,6 +160,11 @@ func (r *Runtime) Close() error {
 		if r.acp != nil {
 			if err := r.acp.Close(); err != nil {
 				closeErrors = append(closeErrors, fmt.Errorf("close ACP runtime: %w", err))
+			}
+		}
+		if r.acpAdapters != nil {
+			if err := r.acpAdapters.Close(); err != nil {
+				closeErrors = append(closeErrors, fmt.Errorf("close ACP adapter registry: %w", err))
 			}
 		}
 		if r.languageServers != nil {

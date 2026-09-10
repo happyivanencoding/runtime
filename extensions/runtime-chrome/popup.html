@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Runtime Chrome Bridge</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <div class="title-row">
+      <div>
+        <h1>Runtime Chrome Bridge</h1>
+        <p>Chrome ↔ Runtime 本地桥接</p>
+      </div>
+      <span id="state" class="badge">检查中</span>
+    </div>
+    <section>
+      <div class="label">Extension ID</div>
+      <code id="extensionId">—</code>
+    </section>
+    <section class="grid">
+      <div><span class="label">标签页</span><strong id="tabs">—</strong></div>
+      <div><span class="label">已附加</span><strong id="attached">—</strong></div>
+    </section>
+    <p id="detail" class="detail">正在读取状态…</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

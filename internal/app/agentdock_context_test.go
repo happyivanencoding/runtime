@@ -93,8 +93,8 @@ func TestAgentDockContextExposesShortACPOrientationWhenEnabled(t *testing.T) {
 	if err := remarshal(disabledResult, &disabledContext); err != nil {
 		t.Fatal(err)
 	}
-	if disabledContext.ACP != nil {
-		t.Fatalf("context should omit ACP while disabled: %#v", disabledContext.ACP)
+	if disabledContext.ACP == nil || !disabledContext.ACP.Enabled || disabledContext.ACP.Agent != "codex" {
+		t.Fatalf("dormant ACP adapter context = %#v", disabledContext.ACP)
 	}
 
 	executable, err := os.Executable()
@@ -129,7 +129,7 @@ func TestAgentDockContextExposesShortACPOrientationWhenEnabled(t *testing.T) {
 	if enabledContext.ACP == nil || !enabledContext.ACP.Enabled || enabledContext.ACP.Agent != "helper" {
 		t.Fatalf("ACP context = %#v", enabledContext.ACP)
 	}
-	for _, want := range []string{"Agent Client Protocol", "仅当用户明确要求时使用", "独特见解", "编排任务", "不是动态 MCP", "mcp_tool_*"} {
+	for _, want := range []string{"Agent Client Protocol", "默认不启动", "仅当用户明确要求", "Player/Judge/Reviewer", "不是动态 MCP", "mcp_tool_*"} {
 		if !strings.Contains(enabledContext.ACP.Description, want) {
 			t.Fatalf("ACP description missing %q: %s", want, enabledContext.ACP.Description)
 		}
