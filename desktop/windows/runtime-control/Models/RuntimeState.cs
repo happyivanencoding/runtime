@@ -1,0 +1,28 @@
+namespace Runtime.Control.Models;
+
+public sealed record RuntimeState(
+    string InstallDirectory,
+    string RuntimeHome,
+    string BinaryPath,
+    string Version,
+    string Commit,
+    bool BinaryExists,
+    int RuntimeProcessCount,
+    bool BridgeConnected,
+    int? BridgePid,
+    DateTimeOffset? BridgeStartedAt,
+    string ExtensionId,
+    string ExtensionPath,
+    bool NativeHostRegistered,
+    bool ChatGptConfigured,
+    string ChatGptAppName,
+    string ChatGptTransport,
+    string ChatGptTunnel,
+    string ChatGptStatus,
+    bool AgentDockRunning,
+    bool CodexAvailable,
+    bool ClaudeAvailable,
+    bool GrokAvailable,
+    bool IsElevated,
+    bool StartupEnabled,
+    DateTimeOffset RefreshedAt);

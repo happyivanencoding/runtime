@@ -57,6 +57,60 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 从交付包安装时，保留包内 `scripts/runtime` 目录结构，把上面 Binary 参数改为
 解压目录中的 `runtime-core.exe`。这里的安装不需要管理员权限。
 
+## Runtime Control Windows 客户端
+
+Runtime 现在有独立的本机控制客户端，源码位于：
+
+```text
+desktop/windows/runtime-control
+```
+
+它不是 AgentDock 控制面板的换皮，而是 Runtime 自己的 control plane。默认展示
+Runtime Core、MCP、ChatGPT Direct MCP、Chrome Bridge、ACP、Windows UIA、
+AgentDock fallback、日志与安全状态；支持系统托盘。客户端只检测 ACP adapter，
+不会因为启动、刷新或开机自动运行而启动任何 ACP agent。
+
+Windows 构建需要 .NET 8 SDK：
+
+```powershell
+.\scripts\runtime\Build-RuntimeControl.ps1 `
+  -Dotnet 'C:\dev\_tools\dotnet8\dotnet.exe'
+
+.\scripts\runtime\Install-RuntimeControl.ps1 `
+  -Binary 'C:\dev\runtime-core-artifacts\runtime-control\Runtime.Control.exe'
+```
+
+默认安装到：
+
+```text
+%LOCALAPPDATA%\RuntimeCore\control\Runtime.Control.exe
+```
+
+安装器同时创建 Start Menu 的 `Runtime Control` 快捷方式，并默认创建桌面快捷方式；
+不需要管理员权限，也不会默认加入开机启动。用户可在客户端“日志与设置”页自行开启
+“登录 Windows 后启动到托盘”。
+
+ChatGPT 直接连接配置完成后，客户端从下面的非敏感摘要读取状态：
+
+```text
+%LOCALAPPDATA%\RuntimeCore\chatgpt-connection.json
+```
+
+其中只能存 app 名称、transport 名称、tunnel 名称/ID、connected/blocked 等非敏感字段；
+禁止存 token、cookie、OAuth secret、API key 或 authorization header。
+
+客户端的 ChatGPT 启动/暂停按钮只在以下本地脚本真实存在时启用：
+
+```text
+%LOCALAPPDATA%\RuntimeCore\scripts\Start-RuntimeForChatGPT.ps1
+%LOCALAPPDATA%\RuntimeCore\scripts\Stop-RuntimeForChatGPT.ps1
+%LOCALAPPDATA%\RuntimeCore\scripts\Status-RuntimeForChatGPT.ps1
+```
+
+这些脚本由正式 Direct MCP / Secure MCP Tunnel 配置步骤生成；`Stop` 必须只切断
+ChatGPT → Runtime 的直接远程控制链路，不得关闭 Chrome、删除 Runtime 数据或停止
+AgentDock fallback。
+
 ## Dynamic MCP 本机注册值
 
 已存在同名入口时不重复添加。仅在新机器首次注册，或有意重新指向安装路径时使用：
@@ -135,29 +189,30 @@ HTTP launcher 只绑定 `127.0.0.1`，地址为 `http://127.0.0.1:8766/mcp`。
 session-0 Windows service，再期待它控制登录用户的应用；锁屏/UAC安全桌面未实现。
 一般应用也不保证有 UIA Pattern，缺少语义接口会明确报错，不强行坐标点击。
 
-## 以后建立独立 ChatGPT Runtime 连接
+## 建立独立 ChatGPT Runtime 连接
 
-当前没有必要；彻底退出旧 AgentDock 转发时再做。根据 2026-09-10 查阅的 OpenAI
-官方文档，在账户/工作区允许时：
+ChatGPT Web 不能直接连接本机 `stdio` / `localhost` MCP。根据 2026-09-10 再次核对的
+OpenAI 官方帮助中心，开发机、本地网络或 on-prem MCP 应使用 **Secure MCP Tunnel**
+连接到受支持的 OpenAI 产品，而不是把本机执行端口直接暴露到公网。
 
-1. Settings -> Security and login -> Developer mode。
-2. 进入 ChatGPT Plugins，选择加号，填名称 Runtime Core 和说明。
-3. Connection 选择可达的 HTTPS MCP endpoint（含 `/mcp`），或已配置好的 Secure
-   MCP Tunnel。这里需要真实端点或 tunnel_id，不能填本机 exe 路径。
-4. 完成相应认证，检查工具列表包含 work_on_project、lsp_query、desktop_inspect 等。
-5. 更新工具元数据后部署/重启服务，在连接上选择 Refresh，开启新对话验证。
+当前 ChatGPT 的入口以 **Apps / custom MCP app** 为主，Developer mode 的位置会按
+Business 与 Enterprise/Edu 工作区略有差异；应以当前 `Settings → Apps`、
+`Workspace settings → Apps`、`Permissions & Roles` 的实际 UI 和最新官方文档为准，
+不要继续照旧版 `Security and login → Plugins` 教程操作。
 
-本轮没有创建新的公网 Runtime URL、OAuth 凭据或 Secure MCP Tunnel，也没有
-修改你的 ChatGPT 设置。因此不要从本文猜一个不存在的地址填进去。
-自有公网部署必须保留现有认证边界；不要把无认证的本机执行能力直接暴露到公网。
+完整 write/modify MCP 目前仍属于受套餐/工作区权限控制的 beta。连接前先确认当前
+账户是否真的允许 Runtime 的 click/type/file write/git/UIA 等 mutation；如果只允许
+read/fetch，保持 AgentDock fallback，不要把 mutation 伪装成 read-only 规避产品限制。
 
-网页版 UI 可能随账户/工作区而不同；本条请求未收到设置截图，本文不是对某张
-截图的逐栏确认。当前确定可用的是前述已有 AgentDock -> Dynamic MCP 路径。
-官方步骤来源：
+本仓库提供给 Codex 的完整配置/验收提示词：
 
 ```text
-https://developers.openai.com/plugins/deploy/connect-chatgpt
+docs/runtime/CODEX_CHATGPT_SETUP_PROMPT.md
 ```
+
+无论采用何种官方私有连接方式，都保留 `runtime-core-preview` 作为过渡 fallback，
+直到真实 ChatGPT Web E2E 通过。不要复用 AgentDock 的公网 token/OAuth secret，也不要
+从本文猜不存在的 tunnel ID。
 
 ## 状态、产物与卸载边界
 
