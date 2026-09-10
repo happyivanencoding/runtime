@@ -7,6 +7,9 @@ import (
 )
 
 func OutputSchema(name string) map[string]any {
+	if schema, ok := nativeOutputSchema(name); ok {
+		return schema
+	}
 	if schema, ok := codingOutputSchema(name); ok {
 		return schema
 	}

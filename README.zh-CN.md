@@ -1,3 +1,5 @@
+> 原生 LSP 与 Windows Accessibility：[第二阶段交付](docs/runtime/PHASE2.md)与[本机安装 / ChatGPT 接入](docs/runtime/INSTALL.md)。
+
 > **runtime-core（内部工作名）**：这是从 AgentDock 演化的独立维护 Runtime。先阅读[第一阶段交付与使用](docs/runtime/PHASE1.md)、[架构](docs/runtime/ARCHITECTURE.md)与[上游维护策略](docs/runtime/UPSTREAM.md)。下方保留上游介绍与署名；其中的官方发行链接不是本 fork 的下载入口。
 
 ---

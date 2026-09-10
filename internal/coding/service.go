@@ -275,7 +275,7 @@ func (s *Service) Context(ctx context.Context, id string) (ProjectContext, error
 			instructions = append(instructions, InstructionFile{Path: path, Content: strings.ToValidUTF8(string(data), ""), Truncated: truncated})
 		}
 	}
-	return ProjectContext{TaskID: id, Project: project, Machine: s.Registry.Machine, Task: task, Repository: c.Repository, Workspace: c.Workspace, Branch: c.Branch, Assignee: c.Assignee, ExecutionMode: c.Mode, Git: state, AvailableCapabilities: []string{"files", "shell", "structured_git", "managed_worktree", "validation", "tasks", "artifacts", "dynamic_mcp", "skills"}, Instructions: instructions, ConnectedDevices: []Device{}, DeviceDiscovery: "not_probed; project.devices is operator-declared metadata", NextAction: "Pass this task_id to subsequent tools. Relative paths inherit workspace; no global current project is changed. Inspect applicable nested instructions before editing."}, nil
+	return ProjectContext{TaskID: id, Project: project, Machine: s.Registry.Machine, Task: task, Repository: c.Repository, Workspace: c.Workspace, Branch: c.Branch, Assignee: c.Assignee, ExecutionMode: c.Mode, Git: state, AvailableCapabilities: []string{"files", "shell", "structured_git", "managed_worktree", "validation", "tasks", "artifacts", "dynamic_mcp", "skills", "lsp"}, Instructions: instructions, ConnectedDevices: []Device{}, DeviceDiscovery: "not_probed; project.devices is operator-declared metadata", NextAction: "Pass this task_id to subsequent tools. Relative paths inherit workspace; no global current project is changed. Inspect applicable nested instructions before editing."}, nil
 }
 
 // ResolveArguments gives existing General tools task-local paths without changing

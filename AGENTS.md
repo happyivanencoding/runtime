@@ -23,3 +23,14 @@ This is an independently maintained AI Computer Runtime, based on AgentDock.
   Test built binaries with a separate state directory and ACP disabled.
 - Read docs/runtime/ARCHITECTURE.md and docs/runtime/UPSTREAM.md before changing
   domain ownership. Project OS owns assignment/review; Runtime owns execution.
+
+## Native LSP / Desktop
+
+- Read docs/runtime/PHASE2.md and INSTALL.md for actual installed capabilities.
+- Use task-bound LSP navigation when available. Positions: input line 1-based,
+  character UTF-16 zero-based; response LSP ranges remain zero-based.
+- LSP diagnostics are not build/test results. Preserve project compiler validation.
+- Desktop actions use a currently observed HWND and unique semantic element.
+  Prefer existing API/CLI; never silently fall back to coordinates or guessed keys.
+- Keep native Desktop in the interactive user session, not a session-0 service.
+- Preserve existing lsp-servers.json when installing/updating the binary.

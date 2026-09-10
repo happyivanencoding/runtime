@@ -196,7 +196,7 @@ func allToolSpecs() []ToolSpec {
 		{Name: "file_publish", Title: "Publish signed file", Description: "Publish a local file or directory as an immutable Artifact snapshot under ~/.agentdock/public-artifacts. Returns artifact_id and, when a reachable base URL is available, a temporary signed download URL. Directories are packaged as tar.gz.", Annotations: mutatingToolAnnotations(false, true), FileArgRewritePaths: []string{"file"}, Handler: func(ctx context.Context, r *Runtime, args map[string]any) (Result, error) {
 			return r.media.FilePublish(ctx, args)
 		}},
-	}, codingToolSpecs()...))
+	}, append(codingToolSpecs(), nativeExecutionToolSpecs()...)...))
 }
 
 func bindToolSchemas(specs []ToolSpec) []ToolSpec {

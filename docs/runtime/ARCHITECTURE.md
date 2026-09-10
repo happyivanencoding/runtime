@@ -2,7 +2,7 @@
 
 General = Files, Shell, MCP, Dynamic MCP, Skills, Tasks, Artifacts, optional ACP.
 Coding = Projects, work_on_project, task-bound workspace, Git, validation, closeout.
-Computer = Browser (existing CDP), Desktop (second phase, native accessibility).
+Computer = Browser (existing CDP), Desktop (native Windows UI Automation in phase two).
 
 ## One ownership model
 
@@ -55,19 +55,25 @@ future control-plane action, separate from model-declared review readiness.
 
 ## Next boundaries, not placeholder packages
 
-- LSP: add a real supervisor under Coding when implementing the first server.
-  Start with TypeScript/Python for JobPilot/Project OS and Go for this Runtime,
-  based on installed executables, then Rust/Kotlin/Java as actual projects need.
-  Definition/references/diagnostics/symbols/workspace symbols/hover/call hierarchy
-  should share the actual server lifecycle, not per-method fake implementations.
+- LSP: implemented in `internal/coding/lsp`, composed by the same Runtime.
+  Real Go/TypeScript/Python servers are discovered/configured per machine and
+  reused per workspace/language. Existing process.Controller owns children.
+  Navigation, symbols, hover, call hierarchy and diagnostics use native JSON-RPC.
+  Queries synchronize queried and previously opened files from disk, not a whole
+  filesystem watcher. Project-structure/configuration changes can require restart.
+  See PHASE2.md for actual tests, protocol positions and TS SDK boundaries.
 - Runner: existing `nexusbridge` already has persistent device pairing, outbound
   WebSocket, reconnect/backoff, tool descriptors and artifact chunk transfer.
   It does not yet supply a coding project inventory or durable command-job
   reconciliation. Add machine/project addressing and inventory to that boundary.
-- Computer: preserve existing Browser tools. Desktop should use Windows UIA /
-  macOS AX to expose applications/windows/tree/semantic lookup/focus/press/type/
-  scroll/clipboard/screen. Use bounded pointer only when structured interaction
-  is unavailable. Priority: structured API > CLI > accessibility > visual pointer.
+- Computer: Browser tools remain unchanged. Desktop is implemented under
+  `internal/computer/desktop` for Windows amd64 using native COM UIA and Win32.
+  Semantic window-scoped tree/find/focus/Invoke/Value/Scroll/Toggle/SelectionItem,
+  clipboard and screenshot are available. No pointer/keyboard fallback or macOS
+  implementation is implied. Native actions require an interactive user session;
+  a session-0 system service is not a desktop agent. Priority remains structured
+  API > CLI > accessibility > visual pointer. Screenshot Artifacts reuse the
+  existing publisher and may optionally attach to the existing Coding Task.
 - Plugins: Dynamic MCP remains the external ecosystem. A runner-local executable
   adapter is justified only by a real capability not well expressed through MCP.
 
@@ -90,3 +96,13 @@ Do not share a writable state home between the installed upstream process and
 the fork: the old binary does not know the new Coding fields. Preview uses an
 independent state home. A future production cutover must stop the old writer before
 reusing its state; this phase neither migrates nor replaces the live installation.
+
+## Installed phase-two development path
+
+`%LOCALAPPDATA%/RuntimeCore` is an independent native installation. The existing
+AgentDock Dynamic MCP `runtime-core-preview` invokes its stdio binary with the
+existing independent state home and ACP=false. This forwarding path is an
+incremental deployment choice, not a second Task/Project system or a permanent
+dependency on upstream AgentDock. A standalone MCP connection is supported by
+the same binary; new public HTTPS/tunnel/auth configuration is not provisioned
+by the local installer. See INSTALL.md.

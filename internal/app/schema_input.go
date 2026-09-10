@@ -8,6 +8,9 @@ import (
 )
 
 func InputSchema(name string) map[string]any {
+	if schema, ok := nativeInputSchema(name); ok {
+		return schema
+	}
 	if schema, ok := codingInputSchema(name); ok {
 		return schema
 	}

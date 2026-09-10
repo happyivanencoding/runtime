@@ -13,6 +13,8 @@ import (
 
 	acpruntime "github.com/uvwt/agentdock/internal/acp"
 	"github.com/uvwt/agentdock/internal/coding"
+	"github.com/uvwt/agentdock/internal/coding/lsp"
+	"github.com/uvwt/agentdock/internal/computer/desktop"
 	"github.com/uvwt/agentdock/internal/config"
 	"github.com/uvwt/agentdock/internal/envstore"
 	"github.com/uvwt/agentdock/internal/evolution"
@@ -36,27 +38,29 @@ type Result = toolcore.Result
 
 type Runtime struct {
 	// runtime-core: Coding composes existing Tasks, sessions and Artifacts.
-	coding        *coding.Service
-	cfg           config.Config
-	ws            *workspace.Workspace
-	skills        *toolskill.Service
-	mcpClients    *mcpclient.Manager
-	tasks         *taskstate.Store
-	command       *toolcommand.Service
-	files         *toolfile.Service
-	dynamicMCP    *toolmcp.Service
-	media         *toolmedia.Service
-	browser       *toolbrowser.Service
-	recall        *toolrecall.Service
-	evolution     *evolution.Service
-	taskTools     *tooltask.Service
-	acp           *toolacp.Service
-	lifecycleMu   sync.RWMutex
-	commandCtx    context.Context
-	commandCancel context.CancelFunc
-	closing       bool
-	closeOnce     sync.Once
-	closeErr      error
+	coding          *coding.Service
+	languageServers *lsp.Manager
+	desktop         *desktop.Service
+	cfg             config.Config
+	ws              *workspace.Workspace
+	skills          *toolskill.Service
+	mcpClients      *mcpclient.Manager
+	tasks           *taskstate.Store
+	command         *toolcommand.Service
+	files           *toolfile.Service
+	dynamicMCP      *toolmcp.Service
+	media           *toolmedia.Service
+	browser         *toolbrowser.Service
+	recall          *toolrecall.Service
+	evolution       *evolution.Service
+	taskTools       *tooltask.Service
+	acp             *toolacp.Service
+	lifecycleMu     sync.RWMutex
+	commandCtx      context.Context
+	commandCancel   context.CancelFunc
+	closing         bool
+	closeOnce       sync.Once
+	closeErr        error
 }
 
 func NewRuntime(cfg config.Config) (*Runtime, error) {
@@ -95,6 +99,8 @@ func NewRuntime(cfg config.Config) (*Runtime, error) {
 	runtime.recall = toolrecall.New(func() config.Config { return runtime.cfg })
 	runtime.evolution = evolution.New(func() config.Config { return runtime.cfg }, tasks)
 	runtime.taskTools = tooltask.New(func() config.Config { return runtime.cfg }, tasks, runtime.evolution)
+	runtime.languageServers = lsp.New(cfg.AgentDockHome)
+	runtime.desktop = desktop.New()
 	runtime.coding, err = coding.New(cfg.AgentDockHome, tasks, runtime.command, publicartifacts.New(cfg.AgentDockHome, cfg.OAuthServerURL, cfg.Port))
 	if err != nil {
 		_ = runtime.Close()
@@ -157,6 +163,11 @@ func (r *Runtime) Close() error {
 		if r.acp != nil {
 			if err := r.acp.Close(); err != nil {
 				closeErrors = append(closeErrors, fmt.Errorf("close ACP runtime: %w", err))
+			}
+		}
+		if r.languageServers != nil {
+			if err := r.languageServers.Close(); err != nil {
+				closeErrors = append(closeErrors, err)
 			}
 		}
 		if r.browser != nil {

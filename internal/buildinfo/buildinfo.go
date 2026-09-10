@@ -8,7 +8,7 @@ import (
 )
 
 // runtime-core working build; original AgentDock baseline is recorded in NOTICE.
-const Version = "0.1.0-runtime-core.1"
+const Version = "0.2.0-runtime-core.1"
 
 var (
 	Commit    string

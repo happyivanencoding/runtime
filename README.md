@@ -1,3 +1,5 @@
+> Native LSP and Windows Accessibility: [phase-two delivery](docs/runtime/PHASE2.md) and [local installation / ChatGPT connection](docs/runtime/INSTALL.md).
+
 > **runtime-core (working name)** — independently maintained Runtime derived from AgentDock. Start with [phase-one delivery and usage](docs/runtime/PHASE1.md), [architecture](docs/runtime/ARCHITECTURE.md), and [upstream policy](docs/runtime/UPSTREAM.md). The original upstream introduction and attribution follow; its release links do not distribute this fork.
 
 ---
