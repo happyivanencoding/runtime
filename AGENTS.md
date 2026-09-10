@@ -18,7 +18,11 @@ This is an independently maintained AI Computer Runtime, based on AgentDock.
 - Do not add speculative hardening, fingerprints, feature flags, migration layers
   or empty abstractions. Preserve existing real security and persistence boundaries.
 - Upstream releases are references for selective porting, not automatic merges or
-  binary updates. Keep `upstream-agentdock`, LICENSE and required attribution.
+  binary updates. Keep `upstream-agentdock`, `LICENSES/Apache-2.0.txt`, `NOTICE` and
+  required upstream attribution. The fork's top-level `LICENSE` is AGPL-3.0.
+- Primary repository: `https://github.com/happyivanencoding/runtime.git`. Use `origin`
+  as the default push target. After committed code changes, push them to this repository
+  by default unless the user explicitly asks not to push.
 - Do not replace the running installed AgentDock while developing this fork.
   Test built binaries with a separate state directory and ACP disabled.
 - Read docs/runtime/ARCHITECTURE.md and docs/runtime/UPSTREAM.md before changing

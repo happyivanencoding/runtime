@@ -22,7 +22,7 @@ Open ChatGPT in your browser and manage multiple computers and servers from one 
 [![GitHub Release](https://img.shields.io/github/v/release/uvwt/agentdock?display_name=tag&logo=github)](https://github.com/uvwt/agentdock/releases)
 [![Docker Hub](https://img.shields.io/docker/pulls/agentdockio/agentdock?logo=docker&label=Docker%20Hub)](https://hub.docker.com/r/agentdockio/agentdock)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fuvwt%2Fagentdock-2496ED?logo=docker&logoColor=white)](https://github.com/uvwt/agentdock/pkgs/container/agentdock)
-[![License](https://img.shields.io/github/license/uvwt/agentdock)](./LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
 
 </div>
 
@@ -238,7 +238,9 @@ Submit bugs and feature requests through [GitHub Issues](https://github.com/uvwt
 
 ## License
 
-Apache License 2.0. See [LICENSE](./LICENSE).
+Runtime is distributed under the [GNU Affero General Public License v3.0](./LICENSE).
+Portions inherited from AgentDock retain their original Apache License 2.0 notices;
+see [LICENSES/Apache-2.0.txt](./LICENSES/Apache-2.0.txt) and [NOTICE](./NOTICE).
 
 ## Community
 

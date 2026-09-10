@@ -23,7 +23,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/uvwt/agentdock?display_name=tag&logo=github)](https://github.com/uvwt/agentdock/releases)
 [![Docker Hub](https://img.shields.io/docker/pulls/agentdockio/agentdock?logo=docker&label=Docker%20Hub)](https://hub.docker.com/r/agentdockio/agentdock)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fuvwt%2Fagentdock-2496ED?logo=docker&logoColor=white)](https://github.com/uvwt/agentdock/pkgs/container/agentdock)
-[![License](https://img.shields.io/github/license/uvwt/agentdock)](./LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
 
 </div>
 
@@ -242,7 +242,9 @@ make check
 
 ## License
 
-Apache License 2.0. See [LICENSE](./LICENSE).
+Runtime 采用 [GNU Affero General Public License v3.0](./LICENSE) 发布。
+继承自 AgentDock 的部分继续保留其原始 Apache License 2.0 声明；
+参见 [LICENSES/Apache-2.0.txt](./LICENSES/Apache-2.0.txt) 与 [NOTICE](./NOTICE)。
 
 ## 交流反馈
 

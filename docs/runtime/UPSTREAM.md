@@ -12,8 +12,9 @@
 - No existing source checkout was present at the inspected development/install
   locations. The installation contained binaries/state, not the development tree.
 - Portable build toolchain: `C:/dev/_tools/go1.26.5/go/bin/go.exe`.
-- LICENSE is the upstream Apache-2.0 text, unchanged. Upstream has no NOTICE file
-  at this tag; the fork adds a provenance NOTICE without deleting source notices.
+- The fork-level LICENSE is GNU AGPL-3.0. The upstream Apache-2.0 text is retained
+  unchanged at LICENSES/Apache-2.0.txt. Upstream has no NOTICE file at this tag; the
+  fork adds a provenance NOTICE without deleting source notices.
 
 The Go module path remains the baseline path for now to avoid an unrelated
 whole-tree import rename. It builds THIS checkout, not the upstream source.

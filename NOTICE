@@ -4,7 +4,9 @@ This product is derived from AgentDock:
 https://github.com/uvwt/AgentDock
 Baseline: v0.8.1, commit f5661f06495b1fad59728983ce06eee2f554f29e.
 The upstream source is distributed under the Apache License, Version 2.0.
-Original license and copyright notices are retained in the source tree.
+Original license and copyright notices are retained in the source tree and in
+LICENSES/Apache-2.0.txt. Fork-level Runtime modifications are distributed under
+the GNU Affero General Public License v3.0; see LICENSE.
 
 Modifications for the independently maintained runtime-core fork:
 Copyright 2026 Jingxuan Li and runtime-core contributors.
