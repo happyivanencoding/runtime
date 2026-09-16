@@ -99,7 +99,7 @@ func TestAgentDockContextSchemaIsStructuredEntrypoint(t *testing.T) {
 	if !ok {
 		t.Fatal("agentdock_context definition missing")
 	}
-	if !strings.Contains(def.Description, "structured AgentDock bootstrap context") {
+	if !strings.Contains(def.Description, "structured Runtime bootstrap context") {
 		t.Fatalf("agentdock_context description should explain structured bootstrap use: %q", def.Description)
 	}
 

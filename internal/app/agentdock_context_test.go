@@ -59,7 +59,7 @@ func TestAgentDockContextToolReturnsStructuredRuntimeIndex(t *testing.T) {
 		t.Fatalf("runtime paths = %#v", got.Runtime)
 	}
 	rules := strings.Join(got.Rules, "\n")
-	for _, want := range []string{"AgentDock 自带工具直接调用", "task_manage checkpoint"} {
+	for _, want := range []string{"Runtime 自带工具直接调用", "task_manage checkpoint"} {
 		if !strings.Contains(rules, want) {
 			t.Fatalf("context rules missing %q: %s", want, rules)
 		}

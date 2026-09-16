@@ -19,7 +19,7 @@ import (
 
 const (
 	ProtocolVersion = "2026-08-11"
-	ServerName      = "agentdock"
+	ServerName      = "runtime-core"
 	PathModel       = "host"
 	RecallTimeoutMS = 30000
 

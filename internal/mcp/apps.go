@@ -23,35 +23,35 @@ func (s *Server) appResourceDefinitions() []appResourceDefinition {
 		{
 			URI:         protocol.ContextUIResourceURI,
 			Name:        "agentdock-context",
-			Title:       "AgentDock context",
-			Description: "Compact read-only AgentDock capability summary with expandable bootstrap context.",
-			HTML:        mcpAppHTML("agentdock_context", "AgentDock context"),
+			Title:       "Runtime context",
+			Description: "Compact read-only Runtime capability summary with expandable bootstrap context.",
+			HTML:        mcpAppHTML("agentdock_context", "Runtime context"),
 		},
 		{
 			URI:         protocol.TaskProgressUIResourceURI,
 			Name:        "agentdock-task-progress",
-			Title:       "AgentDock task",
+			Title:       "Runtime task",
 			Description: "Compact read-only task lifecycle view for task_manage results and task snapshots.",
 			HTML:        mcpAppHTML("task_progress", "Task"),
 		},
 		{
 			URI:         protocol.FileChangeUIResourceURI,
 			Name:        "agentdock-file-change",
-			Title:       "AgentDock file change",
+			Title:       "Runtime file change",
 			Description: "Read-only view of the file_edit result, including diff preview and file operation summary.",
 			HTML:        mcpAppHTML("file_change", "File change"),
 		},
 		{
 			URI:         protocol.DynamicMCPUIResourceURI,
 			Name:        "agentdock-dynamic-mcp",
-			Title:       "AgentDock dynamic MCP",
+			Title:       "Runtime dynamic MCP",
 			Description: "Compact external MCP tool invocation view.",
 			HTML:        mcpAppHTML("dynamic_mcp", "Dynamic MCP"),
 		},
 		{
 			URI:         protocol.ArtifactUIResourceURI,
 			Name:        "agentdock-artifact",
-			Title:       "AgentDock artifact",
+			Title:       "Runtime artifact",
 			Description: "Compact published Artifact summary with expandable file metadata and signed URL information.",
 			HTML:        mcpAppHTML("artifact", "Artifact"),
 		},
@@ -61,14 +61,14 @@ func (s *Server) appResourceDefinitions() []appResourceDefinition {
 			appResourceDefinition{
 				URI:         protocol.RecallUIResourceURI,
 				Name:        "agentdock-recall",
-				Title:       "AgentDock Recall",
+				Title:       "Runtime Recall",
 				Description: "Compact NexusDock Recall write results.",
 				HTML:        mcpAppHTML("recall", "Recall"),
 			},
 			appResourceDefinition{
 				URI:         protocol.WorkflowUIResourceURI,
 				Name:        "agentdock-workflow",
-				Title:       "AgentDock workflow",
+				Title:       "Runtime workflow",
 				Description: "Compact workflow template match recommendation view.",
 				HTML:        mcpAppHTML("workflow", "Workflow"),
 			},
@@ -78,7 +78,7 @@ func (s *Server) appResourceDefinitions() []appResourceDefinition {
 		definitions = append(definitions, appResourceDefinition{
 			URI:         protocol.ACPStatusUIResourceURI,
 			Name:        "agentdock-acp-status",
-			Title:       "AgentDock ACP conversation",
+			Title:       "Runtime ACP conversation",
 			Description: "Read-only ACP session view with concise user and assistant conversation output.",
 			HTML:        mcpAppHTML("acp_status", "ACP status"),
 		})
@@ -125,11 +125,11 @@ func (s *Server) registerAppResources() {
 	}
 }
 
-// ReadAppResource exposes only AgentDock-owned MCP App resources to the Nexus bridge.
+// ReadAppResource exposes only Runtime-owned MCP App resources to the Nexus bridge.
 // Tool execution and arbitrary local resources are intentionally not routed through this path.
 func (s *Server) ReadAppResource(uri string) (map[string]any, error) {
 	if s == nil || s.runtime == nil {
-		return nil, fmt.Errorf("AgentDock runtime is not initialized")
+		return nil, fmt.Errorf("Runtime runtime is not initialized")
 	}
 	uri = strings.TrimSpace(uri)
 	for _, definition := range s.appResourceDefinitions() {
@@ -256,10 +256,10 @@ pre{margin:8px 0 0;max-height:420px;overflow:auto;border-top:1px solid #eee;padd
     toggle.type="button";toggle.setAttribute("aria-expanded","false");
     const primaryWrap=el("span","compact-primary");
     if(primary.action)primaryWrap.append(el("strong","compact-action",actionLabel(primary.action)));
-    primaryWrap.append(el("span","compact-title",primary.title||"AgentDock"));
+    primaryWrap.append(el("span","compact-title",primary.title||"Runtime"));
     toggle.append(primaryWrap);
     const end=el("span","compact-end");
-    end.append(el("span","brand","AgentDock"));end.append(el("span","chevron"));toggle.append(end);
+    end.append(el("span","brand","Runtime"));end.append(el("span","chevron"));toggle.append(end);
     const compactRows=(rows||[]).filter(Boolean);
     if(compactRows.length){
       for(const row of compactRows){row.classList.add("compact-row");toggle.append(row)}
@@ -642,13 +642,13 @@ pre{margin:8px 0 0;max-height:420px;overflow:auto;border-top:1px solid #eee;padd
       content.replaceChildren();
       if(!isObject(node.context)||node.error){
         const unavailable=el("div","context-node-unavailable");
-        unavailable.append(el("strong","",String(node.name||node.node_id||"AgentDock")+" 当前不可用"));
-        unavailable.append(el("span","",String(node.error||(node.online===true?"Context 暂不可用":"AgentDock 节点当前离线"))));
+        unavailable.append(el("strong","",String(node.name||node.node_id||"Runtime")+" 当前不可用"));
+        unavailable.append(el("span","",String(node.error||(node.online===true?"Context 暂不可用":"Runtime 节点当前离线"))));
         content.append(unavailable);
         requestAnimationFrame(reportSize);
         return;
       }
-      // Fleet 只负责选择设备；设备内容继续复用 AgentDock 单节点 Context 视图。
+      // Fleet 只负责选择设备；设备内容继续复用 Runtime 单节点 Context 视图。
       appendNodeAgentContext(content,{
         skills:node.context.skills,
         dynamic_mcp:node.context.dynamic_mcp,
@@ -666,7 +666,7 @@ pre{margin:8px 0 0;max-height:420px;overflow:auto;border-top:1px solid #eee;padd
       button.type="button";
       button.setAttribute("aria-pressed","false");
       const status=node.error?"不可用":(node.online===true?"在线":"离线");
-      button.append(el("span","context-node-tab-name",node.name||node.node_id||"AgentDock"));
+      button.append(el("span","context-node-tab-name",node.name||node.node_id||"Runtime"));
       button.append(el("span","context-node-tab-status",status));
       button.addEventListener("click",()=>selectNode(index));
       buttons.push(button);tabs.append(button);
@@ -808,7 +808,7 @@ pre{margin:8px 0 0;max-height:420px;overflow:auto;border-top:1px solid #eee;padd
         item.append(el("div","message-text",message.content));
         messages.append(item);
       }
-      if(messages.childNodes.length)fragment.append(messages);else fragment.append(el("div","empty","No user or assistant messages in this AgentDock process."));
+      if(messages.childNodes.length)fragment.append(messages);else fragment.append(el("div","empty","No user or assistant messages in this Runtime process."));
       const compactRows=[];
       const latest=[...state.messages].reverse().find(message=>isObject(message)&&(message.role==="user"||message.role==="assistant")&&typeof message.content==="string"&&message.content);
       if(latest)compactRows.push(el("span","compact-summary",latest.content));
