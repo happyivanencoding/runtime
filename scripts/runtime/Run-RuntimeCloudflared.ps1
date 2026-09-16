@@ -3,6 +3,7 @@
 param([string]$RuntimeInstallDir = (Join-Path $env:LOCALAPPDATA 'RuntimeCore'))
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Security
 $RuntimeInstallDir = [IO.Path]::GetFullPath($RuntimeInstallDir)
 $secretsDir = Join-Path $RuntimeInstallDir 'secrets'
 $stateDir = Join-Path $RuntimeInstallDir 'public-edge'

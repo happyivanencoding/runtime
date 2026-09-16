@@ -107,13 +107,27 @@ Runtime 的固定公网 lifecycle 脚本随安装复制到本机；Runtime Contr
 
 ```text
 %LOCALAPPDATA%\RuntimeCore\scripts\Start-RuntimeForChatGPT.ps1
+%LOCALAPPDATA%\RuntimeCore\scripts\Recover-RuntimeForChatGPT.ps1
+%LOCALAPPDATA%\RuntimeCore\scripts\Install-RuntimeRecoveryTask.ps1
 %LOCALAPPDATA%\RuntimeCore\scripts\Stop-RuntimeForChatGPT.ps1
 %LOCALAPPDATA%\RuntimeCore\scripts\Status-RuntimeForChatGPT.ps1
 ```
 
 这些脚本由 Runtime 固定公网 MCP 配置步骤生成；`Stop` 必须只切断
 `runtime.thegreatnovel.com/mcp` → Runtime 的独立 Cloudflare 公网链路，不得关闭 Chrome、
-删除 Runtime 数据或停止 AgentDock fallback。
+删除 Runtime 数据或停止 AgentDock fallback。`Status` 会真实访问 loopback 和公网 `/context`，
+因此 `status` 是 live 状态，`recorded_status` 才是磁盘里上一次记录的状态。
+
+公网 tunnel/token 配置完成后执行一次：
+
+```powershell
+& "$env:LOCALAPPDATA\RuntimeCore\scripts\Install-RuntimeRecoveryTask.ps1"
+```
+
+它注册 `Runtime Public Edge Recovery`：登录时和之后每 2 分钟运行一次。健康时不做任何重启；
+本地 Runtime 健康但公网连续失败时只恢复 Runtime 自己的 cloudflared；显式 `Stop` 后不会自动拉起。
+若机器重启/进程异常消失而上次状态不是 `stopped`，则会重新建立 Runtime 公网 edge。任务使用与
+`execution_privilege` 匹配的 standard/administrator run level，并允许在电池模式运行。
 
 ## Dynamic MCP 本机注册值
 

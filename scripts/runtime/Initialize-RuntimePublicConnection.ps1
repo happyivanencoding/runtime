@@ -29,6 +29,7 @@ $config = [ordered]@{
     cloudflare_hostname = ([Uri]$PublicOrigin).Host
     cloudflared_binary = (Join-Path $RuntimeInstallDir 'bin\cloudflared.exe')
     auth_mode = 'oauth+bearer'
+    execution_privilege = $(if($null -ne $previous -and $previous.execution_privilege -eq 'administrator'){'administrator'}else{'standard'})
     status = $previousStatus
     openai_secure_mcp_tunnel = 'disabled_by_architecture'
     updated_at = [DateTimeOffset]::Now.ToString('o')

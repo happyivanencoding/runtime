@@ -43,6 +43,9 @@ foreach ($name in @(
     'Run-RuntimePublic.ps1',
     'Run-RuntimeCloudflared.ps1',
     'Start-RuntimeForChatGPT.ps1',
+    'Recover-RuntimeForChatGPT.ps1',
+    'Install-RuntimeRecoveryTask.ps1',
+    'Start-RuntimeAdministratorSession.ps1',
     'Stop-RuntimeForChatGPT.ps1',
     'Status-RuntimeForChatGPT.ps1'
 )) {

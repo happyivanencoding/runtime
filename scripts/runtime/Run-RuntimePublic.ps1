@@ -3,6 +3,7 @@
 param([string]$RuntimeInstallDir = (Join-Path $env:LOCALAPPDATA 'RuntimeCore'))
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Security
 $RuntimeInstallDir = [IO.Path]::GetFullPath($RuntimeInstallDir)
 $install = Get-Content -LiteralPath (Join-Path $RuntimeInstallDir 'install.json') -Raw | ConvertFrom-Json
 $public = Get-Content -LiteralPath (Join-Path $RuntimeInstallDir 'public-connection.json') -Raw | ConvertFrom-Json

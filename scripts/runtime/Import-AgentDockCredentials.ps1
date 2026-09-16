@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Security
 $AgentDockRoot = [IO.Path]::GetFullPath($AgentDockRoot)
 $RuntimeInstallDir = [IO.Path]::GetFullPath($RuntimeInstallDir)
 $secretsDir = Join-Path $RuntimeInstallDir 'secrets'

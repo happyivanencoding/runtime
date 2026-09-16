@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Security
 $TokenFile = (Resolve-Path -LiteralPath $TokenFile).Path
 $RuntimeInstallDir = [IO.Path]::GetFullPath($RuntimeInstallDir)
 $secretsDir = Join-Path $RuntimeInstallDir 'secrets'
