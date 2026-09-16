@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -37,7 +38,7 @@ func TestReadArtifactChunkServesPrivateBridgePayload(t *testing.T) {
 }
 
 func TestToolDescriptorsExposeSafetyAnnotations(t *testing.T) {
-	descriptors := toolDescriptorsForNames([]string{"read_file", "skill_package", "task_manage", "file_publish"}, config.Config{})
+	descriptors := toolDescriptorsForNames([]string{"read_file", "file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit", "skill_package", "task_manage", "file_publish"}, config.Config{})
 	byName := map[string]map[string]any{}
 	for _, descriptor := range descriptors {
 		name, _ := descriptor["name"].(string)
@@ -45,6 +46,10 @@ func TestToolDescriptorsExposeSafetyAnnotations(t *testing.T) {
 	}
 
 	assertToolAnnotation(t, byName["read_file"], true, false, false)
+	for _, name := range []string{"file_replace", "file_patch", "file_add", "file_delete", "file_move"} {
+		assertToolAnnotation(t, byName[name], false, false, false)
+	}
+	assertToolAnnotation(t, byName["file_edit"], false, true, false)
 	assertToolAnnotation(t, byName["skill_package"], false, true, true)
 	assertToolAnnotation(t, byName["task_manage"], false, false, false)
 	assertToolAnnotation(t, byName["file_publish"], false, false, true)
@@ -73,6 +78,40 @@ func assertToolAnnotation(t *testing.T, descriptor map[string]any, readOnly, des
 	}
 	assertBoolPointer("destructiveHint", destructive)
 	assertBoolPointer("openWorldHint", openWorld)
+}
+
+func TestMutationSchemasExposeIdempotencyWithoutWeakeningSafety(t *testing.T) {
+	descriptors := toolDescriptorsForNames([]string{"read_file", "request_receipt", "file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit", "exec_command"}, config.Config{})
+	byName := map[string]map[string]any{}
+	for _, descriptor := range descriptors {
+		name, _ := descriptor["name"].(string)
+		byName[name] = descriptor
+	}
+	for _, name := range []string{"file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit", "exec_command"} {
+		props := byName[name]["inputSchema"].(map[string]any)["properties"].(map[string]any)
+		if _, ok := props["idempotency_key"]; !ok {
+			t.Fatalf("%s missing MCP idempotency_key: %#v", name, props)
+		}
+	}
+	for _, name := range []string{"file_edit", "exec_command"} {
+		annotations := byName[name]["annotations"].(map[string]any)
+		destructive, ok := annotations["destructiveHint"].(*bool)
+		if !ok || destructive == nil || !*destructive {
+			t.Fatalf("%s compatibility/generic destructiveHint was weakened: %#v", name, annotations)
+		}
+	}
+	readProps := byName["read_file"]["inputSchema"].(map[string]any)["properties"].(map[string]any)
+	if _, ok := readProps["idempotency_key"]; ok {
+		t.Fatalf("read-only read_file unexpectedly exposes mutation idempotency_key")
+	}
+	receiptProps := byName["request_receipt"]["inputSchema"].(map[string]any)["properties"].(map[string]any)
+	if _, ok := receiptProps["idempotency_key"]; !ok {
+		t.Fatalf("request_receipt must accept the original idempotency_key as a lookup selector: %#v", receiptProps)
+	}
+	receiptAnnotations := byName["request_receipt"]["annotations"].(map[string]any)
+	if readOnly, _ := receiptAnnotations["readOnlyHint"].(bool); !readOnly {
+		t.Fatalf("request_receipt must remain read-only: %#v", receiptAnnotations)
+	}
 }
 
 func TestFilePublishDescriptorExposesFileRewritePath(t *testing.T) {
@@ -247,6 +286,37 @@ func TestOfficialSDKServerListsAndCallsAgentDockTools(t *testing.T) {
 	runtimeInfo, runtimeOK := structured["runtime"].(map[string]any)
 	if !ok || !runtimeOK || runtimeInfo["os"] == "" || runtimeInfo["path_model"] != config.PathModel || result.IsError {
 		t.Fatalf("CallTool() result = %#v", result)
+	}
+
+	mutationPath := filepath.Join(root, "idempotent.txt")
+	mutationArgs := map[string]any{"action": "add", "path": mutationPath, "content": "once", "idempotency_key": "test-mutation-key-0001"}
+	firstMutation, err := session.CallTool(t.Context(), &mcpsdk.CallToolParams{Name: "file_edit", Arguments: mutationArgs})
+	if err != nil || firstMutation.IsError {
+		t.Fatalf("first idempotent mutation = %#v err=%v", firstMutation, err)
+	}
+	if firstMutation.Meta["runtime/receiptId"] == nil || firstMutation.Meta["runtime/requestId"] == nil {
+		t.Fatalf("first mutation meta = %#v", firstMutation.Meta)
+	}
+	replayedMutation, err := session.CallTool(t.Context(), &mcpsdk.CallToolParams{Name: "file_edit", Arguments: mutationArgs})
+	if err != nil || !replayedMutation.IsError {
+		t.Fatalf("replayed mutation = %#v err=%v", replayedMutation, err)
+	}
+	replayedStructured, _ := replayedMutation.StructuredContent.(map[string]any)
+	if replayedStructured["code"] != "IDEMPOTENT_REPLAY" {
+		t.Fatalf("replay code = %#v", replayedStructured)
+	}
+	data, err := os.ReadFile(mutationPath)
+	if err != nil || string(data) != "once" {
+		t.Fatalf("idempotent file content=%q err=%v", data, err)
+	}
+	receiptResult, err := session.CallTool(t.Context(), &mcpsdk.CallToolParams{Name: "request_receipt", Arguments: map[string]any{"idempotency_key": "test-mutation-key-0001"}})
+	if err != nil || receiptResult.IsError {
+		t.Fatalf("request_receipt result = %#v err=%v", receiptResult, err)
+	}
+	receiptStructured, _ := receiptResult.StructuredContent.(map[string]any)
+	receipt, _ := receiptStructured["receipt"].(map[string]any)
+	if receipt["status"] != "completed" || receipt["arguments_sha256"] == "" || receipt["idempotency_key_sha256"] == "" {
+		t.Fatalf("receipt = %#v", receipt)
 	}
 
 	if err := session.Close(); err != nil {

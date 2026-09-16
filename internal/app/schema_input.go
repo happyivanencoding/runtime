@@ -57,8 +57,51 @@ func InputSchema(name string) map[string]any {
 		props["context_lines"] = boundedIntProp("Context lines around each match. Capped at 20.", 0, 20)
 		props["max_results"] = boundedIntProp("Maximum matches. Defaults to 100 and is capped at 1000.", 1, 1000)
 		required = []string{"query"}
+	case "request_receipt":
+		props["idempotency_key"] = stringProp("Original idempotency key used for a mutating MCP tool. Runtime stores only its SHA-256 hash.")
+		props["receipt_id"] = stringProp("Receipt id returned by a prior mutating MCP tool call.")
+		props["limit"] = boundedIntProp("Maximum recent receipts when no key/id is supplied. Defaults to 20 and is capped at 100.", 1, 100)
+	case "file_replace":
+		props["path"] = stringProp(toolfile.PathDescription("Existing host file path. Relative paths resolve from ~/AgentDock."))
+		toolfile.AddRuntimeProperties(props)
+		props["old"] = stringProp("Exact UTF-8 text to replace.")
+		props["new"] = stringProp("Replacement UTF-8 text.")
+		props["replace_all"] = boolProp("Replace every match instead of only the first.")
+		props["expected_matches"] = map[string]any{"type": "integer", "description": "Required number of matches. Defaults to 1; zero asserts no matches.", "minimum": 0}
+		props["dry_run"] = boolProp("Preview or validate without writing.")
+		props["max_diff_bytes"] = boundedIntProp("Maximum diff preview bytes. Defaults to 65536 and is capped at 4194304.", 1, toolfile.MaxTextOutputBytes)
+		required = []string{"path", "old", "new"}
+	case "file_patch":
+		props["patch"] = stringProp(toolfile.PatchDescription("Structured update-only patch. Must use *** Begin Patch / *** Update File / *** End Patch and exactly one Update File operation."))
+		props["workdir"] = stringProp(toolfile.PathDescription("Patch working directory."))
+		toolfile.AddRuntimeProperties(props)
+		props["dry_run"] = boolProp("Preview or validate without writing.")
+		props["max_diff_bytes"] = boundedIntProp("Maximum diff preview bytes. Defaults to 65536 and is capped at 4194304.", 1, toolfile.MaxTextOutputBytes)
+		required = []string{"patch"}
+	case "file_add":
+		props["path"] = stringProp(toolfile.PathDescription("New host file path. The destination must not already exist."))
+		toolfile.AddRuntimeProperties(props)
+		props["content"] = stringProp("UTF-8 text content for the new file.")
+		props["dry_run"] = boolProp("Preview or validate without writing.")
+		props["max_diff_bytes"] = boundedIntProp("Maximum diff preview bytes. Defaults to 65536 and is capped at 4194304.", 1, toolfile.MaxTextOutputBytes)
+		required = []string{"path", "content"}
+	case "file_delete":
+		props["path"] = stringProp(toolfile.PathDescription("Host path to delete."))
+		toolfile.AddRuntimeProperties(props)
+		props["recursive"] = boolProp("Required for deleting directories.")
+		props["dry_run"] = boolProp("Preview or validate without writing.")
+		props["max_diff_bytes"] = boundedIntProp("Maximum diff preview bytes. Defaults to 65536 and is capped at 4194304.", 1, toolfile.MaxTextOutputBytes)
+		required = []string{"path"}
+	case "file_move":
+		props["path"] = stringProp(toolfile.PathDescription("Source host path."))
+		props["new_path"] = stringProp(toolfile.PathDescription("Destination host path."))
+		toolfile.AddRuntimeProperties(props)
+		props["overwrite"] = boolProp("Allow replacing an existing destination.")
+		props["dry_run"] = boolProp("Preview or validate without writing.")
+		props["max_diff_bytes"] = boundedIntProp("Maximum diff preview bytes. Defaults to 65536 and is capped at 4194304.", 1, toolfile.MaxTextOutputBytes)
+		required = []string{"path", "new_path"}
 	case "file_edit":
-		props["action"] = map[string]any{"type": "string", "description": "File edit action.", "enum": []string{"replace", "patch", "add", "delete", "move"}}
+		props["action"] = map[string]any{"type": "string", "description": "Compatibility file edit action.", "enum": []string{"replace", "patch", "add", "delete", "move"}}
 		props["path"] = stringProp(toolfile.PathDescription("Host path for replace, add, delete, or move. Relative paths resolve from ~/AgentDock."))
 		toolfile.AddRuntimeProperties(props)
 		props["old"] = stringProp("Exact UTF-8 text to replace.")

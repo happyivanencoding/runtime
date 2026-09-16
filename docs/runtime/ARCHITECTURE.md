@@ -96,6 +96,13 @@ presets and an explicit-command path for other ACP agents. The legacy configured
 ACP surface remains compatibility-only behind its old switch. Coding and Computer
 must function without any model/backend process.
 
+A Codex ACP agent should use its own native coding/file/shell/Git capabilities for
+ordinary repository work. Runtime is an optional computer-capability extension for
+things the ACP environment does not natively provide, such as Runtime-managed
+browser/CDP, Windows UI Automation, machine services, or other host-level actions.
+The standalone Codex Client likewise keeps its own native coding and computer-use
+path; it must not be routed through Runtime merely because Runtime is installed.
+
 ## Evidence and preview boundaries
 
 The initial tools use host-native repository paths. WSL workspaces and remote

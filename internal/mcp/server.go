@@ -17,18 +17,21 @@ import (
 	"github.com/uvwt/agentdock/internal/app"
 	"github.com/uvwt/agentdock/internal/buildinfo"
 	"github.com/uvwt/agentdock/internal/config"
+	"github.com/uvwt/agentdock/internal/mcpreceipt"
 	"github.com/uvwt/agentdock/internal/publicartifacts"
+	"github.com/uvwt/agentdock/internal/requestid"
 )
 
 type Server struct {
 	runtime     *app.Runtime
 	cfg         config.Config
+	receipts    *mcpreceipt.Store
 	sdk         *mcpsdk.Server
 	httpHandler http.Handler
 }
 
 func NewServer(runtime *app.Runtime, cfg config.Config) *Server {
-	server := &Server{runtime: runtime, cfg: cfg}
+	server := &Server{runtime: runtime, cfg: cfg, receipts: mcpreceipt.New(cfg.AgentDockHome)}
 	serverOptions := &mcpsdk.ServerOptions{
 		Capabilities: &mcpsdk.ServerCapabilities{},
 		Instructions: serverInstructions(cfg.NexusEndpoint != "", cfg.Instructions),
@@ -178,7 +181,7 @@ func (s *Server) registerTool(name string, cfg config.Config) {
 		Name:         name,
 		Title:        def.Title,
 		Description:  def.Description,
-		InputSchema:  app.InputSchemaForConfig(name, cfg),
+		InputSchema:  mcpInputSchema(name, cfg),
 		OutputSchema: app.OutputSchemaForConfig(name, cfg),
 	}
 	if def.Annotations != nil {
@@ -202,22 +205,89 @@ func (s *Server) registerTool(name string, cfg config.Config) {
 
 func (s *Server) callTool(ctx context.Context, name string, request *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 	started := time.Now()
+	ctx, requestID := requestid.Ensure(ctx)
 	arguments := map[string]any{}
 	if request != nil && request.Params != nil && len(request.Params.Arguments) > 0 && string(request.Params.Arguments) != "null" {
 		if err := json.Unmarshal(request.Params.Arguments, &arguments); err != nil {
-			slog.Warn("tool params invalid", "tool", name, "duration_ms", time.Since(started).Milliseconds())
+			slog.Warn("tool params invalid", "tool", name, "request_id", requestID, "duration_ms", time.Since(started).Milliseconds())
 			return nil, &sdkjsonrpc.Error{Code: sdkjsonrpc.CodeInvalidParams, Message: "tool arguments must be a JSON object"}
 		}
 	}
-	slog.Info("tool started", "tool", name)
-	result, err := s.runtime.Call(ctx, name, arguments)
-	finishedAttrs := []any{"tool", name, "duration_ms", time.Since(started).Milliseconds(), "ok", err == nil}
+
+	runtimeArguments := make(map[string]any, len(arguments))
+	for key, value := range arguments {
+		runtimeArguments[key] = value
+	}
+
+	def, hasDefinition := toolDefinition(name)
+	idempotencyKey := ""
+	if hasDefinition && isMutatingTool(def) {
+		idempotencyKey, _ = runtimeArguments["idempotency_key"].(string)
+		delete(runtimeArguments, "idempotency_key")
+	}
+
+	var receipt mcpreceipt.Record
+	receiptPersisted := false
+	if hasDefinition && isMutatingTool(def) && idempotencyKey != "" {
+		argumentsHash, hashErr := mcpreceipt.HashArguments(runtimeArguments)
+		if hashErr != nil {
+			return callToolProblem(name, requestID, "IDEMPOTENCY_HASH_FAILED", "could not prepare a mutation receipt", nil)
+		}
+		var existing bool
+		var beginErr error
+		receipt, existing, beginErr = s.receipts.Begin(idempotencyKey, name, argumentsHash, requestID)
+		if beginErr != nil {
+			return callToolProblem(name, requestID, "RECEIPT_PERSIST_FAILED", "mutation was not executed because its receipt could not be persisted", nil)
+		}
+		receiptPersisted = true
+		if existing {
+			if receipt.Tool != name || receipt.ArgumentsSHA256 != argumentsHash {
+				return callToolProblem(name, requestID, "IDEMPOTENCY_CONFLICT", "the idempotency key is already bound to different mutation arguments", map[string]any{"receipt": receipt})
+			}
+			code, message := "IDEMPOTENT_REPLAY", "mutation already reached Runtime and will not be executed again"
+			if receipt.Status == "started" {
+				code, message = "IDEMPOTENCY_IN_PROGRESS", "mutation receipt already exists in started state; inspect the receipt before any retry"
+			} else if receipt.Status == "failed" {
+				code, message = "IDEMPOTENT_PRIOR_FAILURE", "the prior mutation reached Runtime and failed; use a new idempotency key only after reviewing the receipt"
+			}
+			return callToolProblem(name, requestID, code, message, map[string]any{"receipt": receipt})
+		}
+	}
+
+	logAttrs := []any{"tool", name, "request_id", requestID}
+	if receipt.ReceiptID != "" {
+		logAttrs = append(logAttrs, "receipt_id", receipt.ReceiptID)
+	}
+	slog.Info("tool started", logAttrs...)
+	result, err := s.runtime.Call(ctx, name, runtimeArguments)
+	envelope := toolEnvelope(name, result, err)
+	encoded, encodeErr := json.Marshal(envelope)
+	resultHash := ""
+	if encodeErr == nil {
+		resultHash = mcpreceipt.HashBytes(encoded)
+	}
+	if receipt.ReceiptID != "" {
+		errorSummary := ""
+		if err != nil {
+			errorSummary = "runtime_tool_error"
+		}
+		if finishedReceipt, finishErr := s.receipts.Finish(receipt, err == nil, errorSummary, resultHash, receiptSummary(result)); finishErr != nil {
+			receiptPersisted = false
+			slog.Error("mutation receipt finish failed", "tool", name, "request_id", requestID, "receipt_id", receipt.ReceiptID, "error", finishErr)
+		} else {
+			receipt = finishedReceipt
+		}
+	}
+
+	finishedAttrs := []any{"tool", name, "request_id", requestID, "duration_ms", time.Since(started).Milliseconds(), "ok", err == nil}
+	if receipt.ReceiptID != "" {
+		finishedAttrs = append(finishedAttrs, "receipt_id", receipt.ReceiptID, "receipt_persisted", receiptPersisted)
+	}
 	if err != nil {
 		finishedAttrs = append(finishedAttrs, "error", err)
 	}
 	slog.Info("tool finished", finishedAttrs...)
 
-	encoded, encodeErr := json.Marshal(toolEnvelope(name, result, err))
 	if encodeErr != nil {
 		return nil, fmt.Errorf("encode MCP tool result: %w", encodeErr)
 	}
@@ -225,12 +295,75 @@ func (s *Server) callTool(ctx context.Context, name string, request *mcpsdk.Call
 	if decodeErr := json.Unmarshal(encoded, &response); decodeErr != nil {
 		return nil, fmt.Errorf("decode MCP tool result: %w", decodeErr)
 	}
-	if def, ok := toolDefinition(name); ok {
-		if meta := toolResultMetadata(def, arguments); len(meta) > 0 {
-			response.Meta = meta
-		}
+	meta := mcpsdk.Meta{"runtime/requestId": requestID}
+	if hasDefinition {
+		mergeMeta(meta, toolResultMetadata(def, runtimeArguments))
+	}
+	if receipt.ReceiptID != "" {
+		meta["runtime/receiptId"] = receipt.ReceiptID
+		meta["runtime/receiptPersisted"] = receiptPersisted
+	}
+	response.Meta = meta
+	return &response, nil
+}
+
+func callToolProblem(name, requestID, code, message string, details map[string]any) (*mcpsdk.CallToolResult, error) {
+	payload := map[string]any{"tool": name, "code": code, "error": message, "request_id": requestID, "retryable": false}
+	for key, value := range details {
+		payload[key] = value
+	}
+	envelope := map[string]any{
+		"isError":           true,
+		"structuredContent": payload,
+		"content":           []map[string]any{{"type": "text", "text": pretty(payload)}},
+	}
+	encoded, err := json.Marshal(envelope)
+	if err != nil {
+		return nil, fmt.Errorf("encode MCP receipt problem: %w", err)
+	}
+	var response mcpsdk.CallToolResult
+	if err := json.Unmarshal(encoded, &response); err != nil {
+		return nil, fmt.Errorf("decode MCP receipt problem: %w", err)
+	}
+	response.Meta = mcpsdk.Meta{"runtime/requestId": requestID}
+	if receipt, ok := details["receipt"].(mcpreceipt.Record); ok && receipt.ReceiptID != "" {
+		response.Meta["runtime/receiptId"] = receipt.ReceiptID
 	}
 	return &response, nil
+}
+
+func receiptSummary(result any) map[string]any {
+	payload := asMap(result)
+	if len(payload) == 0 {
+		return nil
+	}
+	keys := []string{"action", "status", "session_id", "command_ok", "exit_code", "changed", "files_changed", "count", "name", "removed", "stopped", "deleted", "task_id", "run_id", "artifact_id"}
+	summary := map[string]any{}
+	for _, key := range keys {
+		value, ok := payload[key]
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			if len(typed) > 256 {
+				typed = typed[:256]
+			}
+			summary[key] = typed
+		case bool, float64, int, int32, int64, uint, uint32, uint64:
+			summary[key] = typed
+		}
+	}
+	if len(summary) == 0 {
+		return nil
+	}
+	return summary
+}
+
+func mergeMeta(target mcpsdk.Meta, extra mcpsdk.Meta) {
+	for key, value := range extra {
+		target[key] = value
+	}
 }
 
 func toolMetadata(def ToolDefinition) map[string]any {
@@ -281,6 +414,35 @@ type writeCloser struct{ io.Writer }
 
 func (writeCloser) Close() error { return nil }
 
+func isMutatingTool(def ToolDefinition) bool {
+	return def.Annotations != nil && !def.Annotations.ReadOnlyHint
+}
+
+func mcpInputSchema(name string, cfg config.Config) map[string]any {
+	schema := app.InputSchemaForConfig(name, cfg)
+	def, ok := toolDefinition(name)
+	if !ok || !isMutatingTool(def) {
+		return schema
+	}
+	cloned := make(map[string]any, len(schema))
+	for key, value := range schema {
+		cloned[key] = value
+	}
+	originalProps, _ := schema["properties"].(map[string]any)
+	props := make(map[string]any, len(originalProps)+1)
+	for key, value := range originalProps {
+		props[key] = value
+	}
+	props["idempotency_key"] = map[string]any{
+		"type":        "string",
+		"minLength":   mcpreceipt.MinKeyLength,
+		"maxLength":   mcpreceipt.MaxKeyLength,
+		"description": "Optional stable key for transport-safe mutation deduplication. If a prior call with the same key reached Runtime, it is never executed again; inspect request_receipt after a 502/timeout before retrying.",
+	}
+	cloned["properties"] = props
+	return cloned
+}
+
 func toolDescriptorsForNames(names []string, cfg config.Config) []map[string]any {
 	descriptors := make([]map[string]any, 0, len(names))
 	for _, name := range names {
@@ -289,7 +451,7 @@ func toolDescriptorsForNames(names []string, cfg config.Config) []map[string]any
 			"name":         name,
 			"title":        def.Title,
 			"description":  def.Description,
-			"inputSchema":  app.InputSchemaForConfig(name, cfg),
+			"inputSchema":  mcpInputSchema(name, cfg),
 			"outputSchema": app.OutputSchemaForConfig(name, cfg),
 		}
 		if def.Annotations != nil {

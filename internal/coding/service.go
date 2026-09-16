@@ -314,9 +314,11 @@ func (s *Service) ResolveArguments(name string, args map[string]any) (map[string
 	switch name {
 	case "read_file", "list_dir", "search_text":
 		resolve("path", true)
-	case "file_edit":
+	case "file_replace", "file_add", "file_delete", "file_move", "file_edit":
 		resolve("path", false)
 		resolve("new_path", false)
+		resolve("workdir", true)
+	case "file_patch":
 		resolve("workdir", true)
 	case "exec_command", "validation_run":
 		resolve("workdir", true)

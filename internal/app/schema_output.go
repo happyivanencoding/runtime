@@ -75,13 +75,29 @@ func OutputSchema(name string) map[string]any {
 		props["matches"] = arrayProp("Text search matches.")
 		props["engine"] = stringProp("Search engine used: rg or go_fallback.")
 		props["truncated"] = boolProp("Whether matches were truncated.")
-	case "file_edit":
-		props["action"] = stringProp("File edit action.")
+	case "request_receipt":
+		props["receipt"] = objectProp("One metadata-only mutation receipt.")
+		props["receipts"] = arrayProp("Recent metadata-only mutation receipts.")
+		props["count"] = intProp("Returned receipt count.")
+	case "file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit":
+		props["action"] = stringProp("File operation performed.")
 		props["summary"] = stringProp("Result summary.")
 		props["path"] = stringProp("Host path. Relative paths resolve from ~/AgentDock.")
 		props["new_path"] = stringProp("Move destination path.")
 		props["workdir"] = stringProp("Patch working directory.")
-		props["affected_files"] = map[string]any{"type": "array", "description": "Files affected by a patch.", "items": map[string]any{"type": "string"}}
+		props["affected_files"] = map[string]any{
+			"type":        "array",
+			"description": "Files affected by a patch.",
+			"items": map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+				"properties": map[string]any{
+					"path":      stringProp("Affected path."),
+					"operation": stringProp("Patch operation such as update, add, delete, or move."),
+					"move_to":   stringProp("Move destination when operation=move."),
+				},
+			},
+		}
 		props["dry_run"] = boolProp("Whether this was a dry run.")
 		props["matches"] = intProp("Match count for replace.")
 		props["changed"] = boolProp("Whether content changed.")
@@ -321,7 +337,7 @@ func OutputSchema(name string) map[string]any {
 	}
 
 	switch name {
-	case "read_file", "list_dir", "search_text", "file_edit":
+	case "read_file", "list_dir", "search_text", "file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit":
 		toolfile.AddRuntimeOutputProperties(props)
 	}
 	return map[string]any{"type": "object", "properties": props, "required": required, "additionalProperties": true}

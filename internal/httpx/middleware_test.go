@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/uvwt/agentdock/internal/requestid"
 )
 
 func TestStatusRecorderKeepsFirstStatusAndCountsBytes(t *testing.T) {
@@ -47,13 +49,20 @@ func TestLoggingMiddlewareDoesNotLogHeadersOrBody(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
 
 	handler := loggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := requestid.From(r.Context()); got != "test-request-1234" {
+			t.Fatalf("request id in context = %q", got)
+		}
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte("response-secret"))
 	}))
 	request := httptest.NewRequest(http.MethodPost, "/mcp?code=query-secret", strings.NewReader("request-secret"))
 	request.Header.Set("Authorization", "Bearer header-secret")
+	request.Header.Set(requestid.Header, "test-request-1234")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
+	if got := response.Header().Get(requestid.Header); got != "test-request-1234" {
+		t.Fatalf("response request id = %q", got)
+	}
 
 	logText := logs.String()
 	for _, secret := range []string{"query-secret", "request-secret", "response-secret", "header-secret"} {
@@ -61,7 +70,7 @@ func TestLoggingMiddlewareDoesNotLogHeadersOrBody(t *testing.T) {
 			t.Fatalf("log leaked %q: %s", secret, logText)
 		}
 	}
-	for _, expected := range []string{`"method":"POST"`, `"path":"/mcp"`, `"status":202`, `"bytes":15`} {
+	for _, expected := range []string{`"request_id":"test-request-1234"`, `"method":"POST"`, `"path":"/mcp"`, `"status":202`, `"bytes":15`} {
 		if !strings.Contains(logText, expected) {
 			t.Fatalf("log missing %s: %s", expected, logText)
 		}

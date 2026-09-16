@@ -47,6 +47,28 @@ function Test-AuthenticatedContext([string]$Origin, [string]$Token, [int]$Timeou
     } catch { return $false }
 }
 
+function Invoke-MCPProbe([string]$McpUrl, [string]$Token, [object]$Payload, [string]$RequestId, [int]$TimeoutSec = 6) {
+    $headers = @{ Authorization = ('Bearer ' + $Token); Accept = 'application/json, text/event-stream'; 'X-Runtime-Request-Id' = $RequestId }
+    $response = Invoke-WebRequest -Uri $McpUrl -Method Post -Headers $headers -ContentType 'application/json' -Body ($Payload | ConvertTo-Json -Depth 8 -Compress) -UseBasicParsing -TimeoutSec $TimeoutSec -MaximumRedirection 0
+    if ([int]$response.StatusCode -ne 200) { return $null }
+    $decoded = $response.Content | ConvertFrom-Json
+    if ($null -ne $decoded.error) { return $null }
+    return $decoded.result
+}
+
+function Test-AuthenticatedMCP([string]$McpUrl, [string]$Token, [int]$TimeoutSec = 6) {
+    if ([string]::IsNullOrWhiteSpace($McpUrl) -or [string]::IsNullOrWhiteSpace($Token)) { return $false }
+    try {
+        $probe = 'health-' + [Guid]::NewGuid().ToString('N')
+        $initPayload = [ordered]@{jsonrpc='2.0';id='init';method='initialize';params=[ordered]@{protocolVersion='2025-06-18';capabilities=@{};clientInfo=[ordered]@{name='runtime-health';version='1'}}}
+        $init = Invoke-MCPProbe $McpUrl $Token $initPayload ($probe + '-init') $TimeoutSec
+        if ($null -eq $init -or $null -eq $init.serverInfo) { return $false }
+        $callPayload = [ordered]@{jsonrpc='2.0';id='call';method='tools/call';params=[ordered]@{name='agentdock_context';arguments=@{}}}
+        $call = Invoke-MCPProbe $McpUrl $Token $callPayload ($probe + '-call') $TimeoutSec
+        return $null -ne $call -and $null -ne $call.structuredContent -and $null -ne $call.structuredContent.runtime -and -not [string]::IsNullOrWhiteSpace([string]$call.structuredContent.runtime.version)
+    } catch { return $false }
+}
+
 $cloudflaredBinary = [string]$config.cloudflared_binary
 if ([string]::IsNullOrWhiteSpace($cloudflaredBinary)) { $cloudflaredBinary = Join-Path $RuntimeInstallDir 'bin\cloudflared.exe' }
 $runtimeUp = Test-OwnedPid (Join-Path $stateDir 'runtime-http.pid') ([string]$install.binary)
@@ -57,7 +79,9 @@ $referenceTokenPresent = Test-Path (Join-Path $secretsDir 'imported-agentdock-cl
 $token = Read-RuntimeSecret 'auth-token.dpapi' 'runtime.auth.bearer.v1'
 try {
     $localReady = if($runtimeUp -eq $true) { Test-AuthenticatedContext ([string]$config.local_origin) $token } elseif($runtimeUp -eq $null) { $null } else { $false }
-    $publicReady = if($runtimeUp -eq $true -and $cloudflareUp -eq $true -and $localReady -eq $true) { Test-AuthenticatedContext ([string]$config.public_origin) $token } elseif($runtimeUp -eq $null -or $cloudflareUp -eq $null) { $null } else { $false }
+    $localMcpReady = if($runtimeUp -eq $true -and $localReady -eq $true) { Test-AuthenticatedMCP ([string]$config.local_mcp_url) $token } elseif($runtimeUp -eq $null) { $null } else { $false }
+    $publicReady = if($runtimeUp -eq $true -and $cloudflareUp -eq $true -and $localReady -eq $true -and $localMcpReady -eq $true) { Test-AuthenticatedContext ([string]$config.public_origin) $token } elseif($runtimeUp -eq $null -or $cloudflareUp -eq $null) { $null } else { $false }
+    $publicMcpReady = if($runtimeUp -eq $true -and $cloudflareUp -eq $true -and $publicReady -eq $true) { Test-AuthenticatedMCP ([string]$config.public_mcp_url) $token } elseif($runtimeUp -eq $null -or $cloudflareUp -eq $null) { $null } else { $false }
 } finally {
     Remove-Variable token -ErrorAction SilentlyContinue
 }
@@ -66,9 +90,9 @@ $liveStatus = if($runtimeUp -eq $false -and $cloudflareUp -eq $false) {
     'stopped'
 } elseif($runtimeUp -eq $null -or $cloudflareUp -eq $null) {
     'unknown'
-} elseif($runtimeUp -eq $true -and $localReady -eq $true -and $cloudflareUp -eq $true -and $publicReady -eq $true) {
+} elseif($runtimeUp -eq $true -and $localReady -eq $true -and $localMcpReady -eq $true -and $cloudflareUp -eq $true -and $publicReady -eq $true -and $publicMcpReady -eq $true) {
     'connected'
-} elseif($runtimeUp -eq $true -and $localReady -eq $true) {
+} elseif($runtimeUp -eq $true -and $localReady -eq $true -and $localMcpReady -eq $true) {
     'degraded'
 } else {
     'error'
@@ -91,7 +115,9 @@ if($null -ne $config.PSObject.Properties['last_recovery_at']) {
     runtime_http_running = $runtimeUp
     cloudflare_running = $cloudflareUp
     local_context_ready = $localReady
+    local_mcp_ready = $localMcpReady
     public_context_ready = $publicReady
+    public_mcp_ready = $publicMcpReady
     live_checked_at = $checkedAt
     last_recovery_at = $lastRecoveryAt
     last_recovery_reason = $(if($null -ne $config.PSObject.Properties['last_recovery_reason']){[string]$config.last_recovery_reason}else{$null})

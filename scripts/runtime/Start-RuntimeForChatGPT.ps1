@@ -62,6 +62,28 @@ function Test-AuthenticatedContext([string]$Origin, [string]$Token, [int]$Timeou
     }
 }
 
+function Invoke-MCPProbe([string]$McpUrl, [string]$Token, [object]$Payload, [string]$RequestId, [int]$TimeoutSec = 6) {
+    $headers = @{ Authorization = ('Bearer ' + $Token); Accept = 'application/json, text/event-stream'; 'X-Runtime-Request-Id' = $RequestId }
+    $response = Invoke-WebRequest -Uri $McpUrl -Method Post -Headers $headers -ContentType 'application/json' -Body ($Payload | ConvertTo-Json -Depth 8 -Compress) -UseBasicParsing -TimeoutSec $TimeoutSec -MaximumRedirection 0
+    if ([int]$response.StatusCode -ne 200) { return $null }
+    $decoded = $response.Content | ConvertFrom-Json
+    if ($null -ne $decoded.error) { return $null }
+    return $decoded.result
+}
+
+function Test-AuthenticatedMCP([string]$McpUrl, [string]$Token, [int]$TimeoutSec = 6) {
+    if ([string]::IsNullOrWhiteSpace($McpUrl) -or [string]::IsNullOrWhiteSpace($Token)) { return $false }
+    try {
+        $probe = 'health-' + [Guid]::NewGuid().ToString('N')
+        $initPayload = [ordered]@{jsonrpc='2.0';id='init';method='initialize';params=[ordered]@{protocolVersion='2025-06-18';capabilities=@{};clientInfo=[ordered]@{name='runtime-health';version='1'}}}
+        $init = Invoke-MCPProbe $McpUrl $Token $initPayload ($probe + '-init') $TimeoutSec
+        if ($null -eq $init -or $null -eq $init.serverInfo) { return $false }
+        $callPayload = [ordered]@{jsonrpc='2.0';id='call';method='tools/call';params=[ordered]@{name='agentdock_context';arguments=@{}}}
+        $call = Invoke-MCPProbe $McpUrl $Token $callPayload ($probe + '-call') $TimeoutSec
+        return $null -ne $call -and $null -ne $call.structuredContent -and $null -ne $call.structuredContent.runtime -and -not [string]::IsNullOrWhiteSpace([string]$call.structuredContent.runtime.version)
+    } catch { return $false }
+}
+
 function Stop-OwnedProcess([string]$PidFile, [string]$ExpectedExe) {
     if (-not (Test-Path -LiteralPath $PidFile)) { return $false }
     $raw = [IO.File]::ReadAllText($PidFile).Trim()
@@ -92,6 +114,15 @@ function Wait-ForContext([string]$Origin, [string]$Token, [int]$Seconds) {
     return $false
 }
 
+function Wait-ForMCP([string]$McpUrl, [string]$Token, [int]$Seconds) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
+    do {
+        if (Test-AuthenticatedMCP $McpUrl $Token) { return $true }
+        Start-Sleep -Milliseconds 500
+    } while([DateTime]::UtcNow -lt $deadline)
+    return $false
+}
+
 function Set-ConfigValue([object]$Config, [string]$Name, [object]$Value) {
     $Config | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
 }
@@ -113,12 +144,13 @@ try {
     if (-not $runtimeWasRunning) { Start-RuntimeHttpWrapper }
 
     $localReady = Wait-ForContext ([string]$config.local_origin) $token 15
+    $localMcpReady = if($localReady){Wait-ForMCP ([string]$config.local_mcp_url) $token 15}else{$false}
     $runtimeUp = [bool](Test-OwnedPid $runtimePidFile $runtimeBinary)
-    if (-not $runtimeUp -or -not $localReady) {
+    if (-not $runtimeUp -or -not $localReady -or -not $localMcpReady) {
         $config.status = 'error'
         $config.updated_at = [DateTimeOffset]::Now.ToString('o')
         [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
-        throw 'Runtime local HTTP is not healthy; public tunnel was not recycled.'
+        throw 'Runtime local HTTP/MCP is not healthy; public tunnel was not recycled.'
     }
 
     $cloudflareWasRunning = [bool](Test-OwnedPid $cloudflarePidFile $cloudflaredBinary)
@@ -132,32 +164,36 @@ try {
     }
 
     $publicReady = $false
+    $publicMcpReady = $false
     if ($cloudflareWasRunning) {
         for($attempt = 1; $attempt -le 3; $attempt++) {
-            if (Test-AuthenticatedContext ([string]$config.public_origin) $token) { $publicReady = $true; break }
+            $publicReady = Test-AuthenticatedContext ([string]$config.public_origin) $token
+            if ($publicReady) { $publicMcpReady = Test-AuthenticatedMCP ([string]$config.public_mcp_url) $token }
+            if ($publicReady -and $publicMcpReady) { break }
             if ($attempt -lt 3) { Start-Sleep -Milliseconds 500 }
         }
-        if (-not $publicReady) {
+        if (-not ($publicReady -and $publicMcpReady)) {
             if (Stop-OwnedProcess $cloudflarePidFile $cloudflaredBinary) {
                 Start-Sleep -Milliseconds 500
                 Start-RuntimeCloudflareWrapper
                 $tunnelRecycled = $true
                 Set-ConfigValue $config 'last_recovery_at' ([DateTimeOffset]::Now.ToString('o'))
-                Set-ConfigValue $config 'last_recovery_reason' 'public_context_failed'
+                Set-ConfigValue $config 'last_recovery_reason' 'public_mcp_roundtrip_failed'
             }
         }
     }
 
     if (-not $publicReady) { $publicReady = Wait-ForContext ([string]$config.public_origin) $token 30 }
+    if ($publicReady -and -not $publicMcpReady) { $publicMcpReady = Wait-ForMCP ([string]$config.public_mcp_url) $token 30 }
     $cloudflareUp = [bool](Test-OwnedPid $cloudflarePidFile $cloudflaredBinary)
-    $config.status = if($localReady -and $publicReady -and $cloudflareUp) { 'connected' } else { 'error' }
+    $config.status = if($localReady -and $localMcpReady -and $publicReady -and $publicMcpReady -and $cloudflareUp) { 'connected' } else { 'error' }
     $liveCheckAt = [DateTimeOffset]::Now.ToString('o')
     Set-ConfigValue $config 'last_live_check_at' $liveCheckAt
     $config.updated_at = $liveCheckAt
     [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
-    if(-not $publicReady -or -not $cloudflareUp) { throw 'Runtime public edge is not ready after live authenticated checks and tunnel recovery.' }
+    if(-not $publicReady -or -not $publicMcpReady -or -not $cloudflareUp) { throw 'Runtime public edge is not ready after authenticated context + MCP round-trip checks and tunnel recovery.' }
 
-    [ordered]@{ status='connected'; public_mcp_url=[string]$config.public_mcp_url; runtime_http=$runtimeUp; cloudflare_tunnel=$cloudflareUp; local_context_ready=$localReady; public_context_ready=$publicReady; tunnel_recycled=$tunnelRecycled; execution_privilege= $(if($isAdministrator){'administrator'}else{'standard'}); acp='dormant' } | ConvertTo-Json
+    [ordered]@{ status='connected'; public_mcp_url=[string]$config.public_mcp_url; runtime_http=$runtimeUp; cloudflare_tunnel=$cloudflareUp; local_context_ready=$localReady; local_mcp_ready=$localMcpReady; public_context_ready=$publicReady; public_mcp_ready=$publicMcpReady; tunnel_recycled=$tunnelRecycled; execution_privilege= $(if($isAdministrator){'administrator'}else{'standard'}); acp='dormant' } | ConvertTo-Json
 } finally {
     Remove-Variable token -ErrorAction SilentlyContinue
 }

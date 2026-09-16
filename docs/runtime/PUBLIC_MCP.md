@@ -24,6 +24,22 @@ https://agent.thegreatnovel.com/mcp
 
 The two products must not share a production hostname or active Cloudflare tunnel token.
 
+## Direct first-class ChatGPT tool surface
+
+The production ChatGPT Web path is **direct Runtime MCP**, not AgentDock Dynamic MCP forwarding. `runtime-core-preview` remains a local development/fallback route only. Normal ChatGPT Web work should therefore see Runtime tools directly in `tools/list` and call them without an intermediate `mcp_tool_search` / `mcp_tool_inspect` / `mcp_tool_call` hop.
+
+For ordinary filesystem work, direct clients should prefer the narrow semantic tools:
+
+- `file_replace` — exact text replacement in an existing file.
+- `file_patch` — update-only structured patch; it rejects add/delete/move patch operations.
+- `file_add` — create a new file without overwriting an existing destination.
+- `file_delete` — explicit delete operation.
+- `file_move` — explicit move operation.
+
+These five direct semantic tools are exposed as mutating, closed-world tools with `destructiveHint=false`. The older multi-action `file_edit` remains available for compatibility and keeps its broad destructive annotation because it combines multiple operation classes. `exec_command` remains the generic shell escape hatch and stays destructive/open-world; it should not be used for routine file or Git work when a dedicated Runtime tool exists.
+
+Structured Git, browser, desktop/UIA and ACP tools are likewise first-class Runtime tools. AgentDock Dynamic MCP remains useful as an alternative/fallback connection, but it is not the intended steady-state path for high-frequency ChatGPT Web → Runtime work.
+
 ## State ownership
 
 `%LOCALAPPDATA%\RuntimeCore\public-connection.json` is the non-secret network/deployment state. It records the loopback MCP URL, public MCP URL, Runtime Cloudflare tunnel name/ID, authentication mode and health state.
@@ -86,9 +102,15 @@ The control client must never add a button that reveals Bearer/OAuth/Cloudflare 
 
 ## Lifecycle
 
-After provisioning, `Start-RuntimeForChatGPT.ps1`, `Stop-RuntimeForChatGPT.ps1`, and `Status-RuntimeForChatGPT.ps1` own the public edge lifecycle. They must be idempotent, run in the interactive user's session, keep one Runtime HTTP owner and one Runtime cloudflared owner, and never start ACP. `Status` reports live health from authenticated `/context` round trips through both loopback and the public hostname; `recorded_status` is exposed separately so stale `public-connection.json` state cannot masquerade as connectivity. `Start` reports connected only after the same authenticated checks succeed.
+After provisioning, `Start-RuntimeForChatGPT.ps1`, `Stop-RuntimeForChatGPT.ps1`, and `Status-RuntimeForChatGPT.ps1` own the public edge lifecycle. They must be idempotent, run in the interactive user's session, keep one Runtime HTTP owner and one Runtime cloudflared owner, and never start ACP. `Status` now performs two authenticated checks through both loopback and the public hostname: a lightweight `/context` round trip and an actual Streamable HTTP MCP `initialize` + read-only `tools/call` (`agentdock_context`). It reports `local_context_ready`, `local_mcp_ready`, `public_context_ready`, and `public_mcp_ready`; `recorded_status` stays separate so stale disk state cannot masquerade as connectivity. `Start` reports connected only when both the HTTP context and real MCP round trips succeed.
 
-When loopback Runtime is healthy but the public authenticated check fails three consecutive times, `Start` treats the edge as degraded and recycles only the Runtime-owned cloudflared process before retrying the public check. It must not restart Runtime Core, Chrome, AgentDock, or the AgentDock tunnel for that failure. A missing Runtime cloudflared process is started directly; a local Runtime health failure is reported without tunnel recycling.
+When loopback Runtime is healthy but the public authenticated MCP round trip fails three consecutive times, `Start` treats the edge as degraded and recycles only the Runtime-owned cloudflared process before retrying the public checks. It must not restart Runtime Core, Chrome, AgentDock, or the AgentDock tunnel for that failure. A missing Runtime cloudflared process is started directly; a local Runtime health failure is reported without tunnel recycling.
+
+## Request correlation and mutation receipts
+
+Every Runtime HTTP request gets an `X-Runtime-Request-Id`: a valid caller-supplied value is preserved, otherwise Runtime generates one and returns it in the response header. The same ID is propagated into MCP tool execution logs and MCP result metadata (`runtime/requestId`). This distinguishes "the tool never reached Runtime" from "Runtime completed the tool but the public response was lost" after an upstream 502.
+
+MCP mutating tools expose an optional `idempotency_key`. When supplied, Runtime atomically writes a metadata-only receipt under the Runtime home before executing the mutation. A repeated key never repeats the mutation: callers receive a replay/in-progress/prior-failure result and can query the original receipt through the read-only `request_receipt` tool. Receipts store only hashes and bounded execution metadata (tool, request ID, timestamps, status, result hash/summary); raw command arguments, stdout/stderr, paths, bearer tokens and the raw idempotency key are not persisted in the receipt. After any ambiguous public-edge failure, query the receipt before retrying a mutation.
 
 `Recover-RuntimeForChatGPT.ps1` is the unattended recovery entrypoint. It first calls live `Status`; healthy state is a no-op, an explicitly recorded `stopped` state stays stopped, while degraded/error state or a previously-running edge whose processes disappeared is handed to `Start`. `Install-RuntimeRecoveryTask.ps1` registers `Runtime Public Edge Recovery` at logon and every two minutes with `IgnoreNew`, start-when-available, battery operation enabled, and the same standard/administrator run level selected for the Runtime public edge. This task exists to recover from network loss, reboot, or a dead/half-dead tunnel; it does not start ACP.
 

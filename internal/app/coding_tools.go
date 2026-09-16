@@ -190,7 +190,15 @@ func (r *Runtime) callCoding(ctx context.Context, name string, args map[string]a
 
 func codingContextTool(name string) bool {
 	switch name {
-	case "read_file", "list_dir", "search_text", "file_edit", "exec_command", "file_publish":
+	case "read_file", "list_dir", "search_text", "file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit", "exec_command", "file_publish":
+		return true
+	}
+	return false
+}
+
+func fileMutationTool(name string) bool {
+	switch name {
+	case "file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit":
 		return true
 	}
 	return false
@@ -205,7 +213,7 @@ func (r *Runtime) callInCodingWorkspace(ctx context.Context, spec ToolSpec, args
 	if spec.Name == "exec_command" {
 		return r.coding.Execute(ctx, id, resolved, false, "", "")
 	}
-	if spec.Name == "file_edit" && args["dry_run"] != true {
+	if fileMutationTool(spec.Name) && args["dry_run"] != true {
 		if _, err = r.tasks.InvalidateCodingCloseout(id); err != nil {
 			return nil, err
 		}
