@@ -22,10 +22,10 @@ func (s *Server) appResourceDefinitions() []appResourceDefinition {
 	definitions := []appResourceDefinition{
 		{
 			URI:         protocol.ContextUIResourceURI,
-			Name:        "agentdock-context",
+			Name:        "runtime-context",
 			Title:       "Runtime context",
 			Description: "Compact read-only Runtime capability summary with expandable bootstrap context.",
-			HTML:        mcpAppHTML("agentdock_context", "Runtime context"),
+			HTML:        mcpAppHTML("runtime_context", "Runtime context"),
 		},
 		{
 			URI:         protocol.TaskProgressUIResourceURI,
@@ -829,7 +829,7 @@ pre{margin:8px 0 0;max-height:420px;overflow:auto;border-top:1px solid #eee;padd
   function renderable(data){
     if(!isObject(data))return false;
     if(data.view)return data.view===expectedView;
-    if(expectedView==="agentdock_context")return Array.isArray(data.skills)||Array.isArray(data.nodes);
+    if(expectedView==="runtime_context")return Array.isArray(data.skills)||Array.isArray(data.nodes);
     if(expectedView==="file_change")return typeof data.action==="string"&&(data.path||data.workdir||data.changed!==undefined);
     if(expectedView==="task_progress")return typeof data.action==="string"&&(isObject(data.task)||isObject(data.task_summary)||Array.isArray(data.tasks)||data.task_id);
     if(expectedView==="recall")return Array.isArray(data.results)||typeof data.recall_action==="string";
@@ -843,7 +843,7 @@ pre{margin:8px 0 0;max-height:420px;overflow:auto;border-top:1px solid #eee;padd
   function render(data){
     if(!renderable(data))return;
     const serialized=JSON.stringify(data);if(serialized===lastSerialized)return;lastSerialized=serialized;
-    if(expectedView==="agentdock_context")renderAgentContext(data);
+    if(expectedView==="runtime_context")renderAgentContext(data);
     else if(expectedView==="task_progress")renderTask(data);
     else if(expectedView==="file_change")renderFileChange(data);
     else if(expectedView==="recall")renderRecall(data);

@@ -66,7 +66,7 @@ func TestRuntimeCallRejectsRemovedListDirArguments(t *testing.T) {
 
 func TestRuntimeCallRejectsUnknownArgumentsForCanonicalTools(t *testing.T) {
 	runtime := newRuntimeValidationTestRuntime(t)
-	_, err := runtime.Call(context.Background(), "agentdock_context", map[string]any{"future_field": true})
+	_, err := runtime.Call(context.Background(), "runtime_context", map[string]any{"future_field": true})
 	if err == nil {
 		t.Fatal("canonical tool accepted unknown field")
 	}

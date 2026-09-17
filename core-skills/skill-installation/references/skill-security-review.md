@@ -226,7 +226,7 @@
 
 - 安装结果名称、版本、摘要和激活状态；
 - 状态中的 `active_version`；
-- `agentdock_context` 索引；
+- `runtime_context` 索引；
 - `read_file skill://<name>/SKILL.md`；
 - 至少一份包内引用；
 - 已安装包摘要与审查摘要一致；

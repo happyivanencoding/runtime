@@ -63,7 +63,7 @@ function Test-AuthenticatedMCP([string]$McpUrl, [string]$Token, [int]$TimeoutSec
         $initPayload = [ordered]@{jsonrpc='2.0';id='init';method='initialize';params=[ordered]@{protocolVersion='2025-06-18';capabilities=@{};clientInfo=[ordered]@{name='runtime-health';version='1'}}}
         $init = Invoke-MCPProbe $McpUrl $Token $initPayload ($probe + '-init') $TimeoutSec
         if ($null -eq $init -or $null -eq $init.serverInfo) { return $false }
-        $callPayload = [ordered]@{jsonrpc='2.0';id='call';method='tools/call';params=[ordered]@{name='agentdock_context';arguments=@{}}}
+        $callPayload = [ordered]@{jsonrpc='2.0';id='call';method='tools/call';params=[ordered]@{name='runtime_context';arguments=@{}}}
         $call = Invoke-MCPProbe $McpUrl $Token $callPayload ($probe + '-call') $TimeoutSec
         return $null -ne $call -and $null -ne $call.structuredContent -and $null -ne $call.structuredContent.runtime -and -not [string]::IsNullOrWhiteSpace([string]$call.structuredContent.runtime.version)
     } catch { return $false }

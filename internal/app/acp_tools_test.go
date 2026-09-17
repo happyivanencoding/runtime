@@ -90,7 +90,7 @@ func TestACPToolsAreFeatureGatedAndUseStrictSchemas(t *testing.T) {
 	if result["count"] != 0 {
 		t.Fatalf("empty ACP session count = %#v", result["count"])
 	}
-	contextResult, err := runtime.Call(context.Background(), "agentdock_context", nil)
+	contextResult, err := runtime.Call(context.Background(), "runtime_context", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

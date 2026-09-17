@@ -319,7 +319,7 @@ exec_command
 5. 运行 `skill-authoring lint`，确认 `portable=true` 并审查 warning；
 6. 使用 `skill_package validate` 校验包级合法性；
 7. 使用 `skill_package install` 安装并激活；
-8. 通过 `agentdock_context` 验证名称和描述进入轻量索引；
+8. 通过 `runtime_context` 验证名称和描述进入轻量索引；
 9. 通过 `read_file skill://<name>/SKILL.md` 验证当前激活正文；
 10. 有引用时读取至少一份引用；
 11. 有辅助脚本时，用 `exec_command skill=<name>` 对当前激活版本运行只读 `status`；
@@ -341,6 +341,6 @@ exec_command
 - `skill-authoring lint` 返回 `portable=true`，warning 已逐项处理；
 - 安全检查、测试和 `skill_package validate` 通过；
 - 新版本已安装并激活；
-- `agentdock_context` 和 `skill://` 读取的是新版本；
+- `runtime_context` 和 `skill://` 读取的是新版本；
 - 当前激活版本的真实只读验证通过；
 - 没有秘密、设备私有状态或旧式架构回流。

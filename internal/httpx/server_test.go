@@ -307,7 +307,7 @@ func TestRuntimeAPIMethodContract(t *testing.T) {
 	}
 }
 
-func TestAgentDockContextRequiresBearerEvenOnLoopback(t *testing.T) {
+func TestRuntimeContextRequiresBearerEvenOnLoopback(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Host = "127.0.0.1"
 	cfg.AuthToken = "secret-token"
@@ -315,7 +315,7 @@ func TestAgentDockContextRequiresBearerEvenOnLoopback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new runtime: %v", err)
 	}
-	handler := agentDockContextHandler(mcp.NewServer(runtime, cfg), cfg, auth.NewOAuthStore())
+	handler := runtimeContextHandler(mcp.NewServer(runtime, cfg), cfg, auth.NewOAuthStore())
 
 	req := httptest.NewRequest(http.MethodGet, "/capabilities/context", nil)
 	recorder := httptest.NewRecorder()
@@ -325,14 +325,14 @@ func TestAgentDockContextRequiresBearerEvenOnLoopback(t *testing.T) {
 	}
 }
 
-func TestAgentDockContextAcceptsBearer(t *testing.T) {
+func TestRuntimeContextAcceptsBearer(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.AuthToken = "secret-token"
 	runtime, err := app.NewRuntime(cfg)
 	if err != nil {
 		t.Fatalf("new runtime: %v", err)
 	}
-	handler := agentDockContextHandler(mcp.NewServer(runtime, cfg), cfg, auth.NewOAuthStore())
+	handler := runtimeContextHandler(mcp.NewServer(runtime, cfg), cfg, auth.NewOAuthStore())
 
 	req := httptest.NewRequest(http.MethodGet, "/capabilities/context", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")

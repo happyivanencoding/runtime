@@ -127,6 +127,11 @@ func mutatingToolAnnotations(destructive, openWorld bool) *ToolAnnotations {
 
 func boolPointer(value bool) *bool { return &value }
 
+func runtimeContextAnnotations() *ToolAnnotations {
+	annotations, _ := mcpcontract.AnnotationContract(mcpcontract.ToolAgentDockContext)
+	return canonicalToolAnnotations(annotations)
+}
+
 func canonicalToolAnnotations(value mcpcontract.Annotations) *ToolAnnotations {
 	annotations := &ToolAnnotations{
 		ReadOnlyHint:    value.ReadOnlyHint,
@@ -149,7 +154,7 @@ func ctxToolHandler(fn func(*Runtime, context.Context, map[string]any) (Result, 
 
 func allToolSpecs() []ToolSpec {
 	return bindToolSchemas(append([]ToolSpec{
-		{Name: "agentdock_context", Title: "Runtime context", Description: "Return structured Runtime bootstrap context including available capabilities, integrations, rules, and high-priority context.", Handler: ctxToolHandler((*Runtime).agentDockContextTool)},
+		{Name: "runtime_context", Title: "Runtime context", Description: "Return structured Runtime bootstrap context including available capabilities, integrations, rules, and high-priority context.", Annotations: runtimeContextAnnotations(), Handler: ctxToolHandler((*Runtime).runtimeContextTool)},
 		{Name: "read_file", Title: "Read file", Description: toolfile.ToolDescription("Read a UTF-8 text file slice. Supports normal Host paths and skill://<name>/<path> resources from the active Skill version."), Annotations: readOnlyToolAnnotations(false), Handler: ctxToolHandler((*Runtime).readFile)},
 		{Name: "list_dir", Title: "List directory", Description: toolfile.ToolDescription("List directory entries with explicit depth, glob filters, and entry-type filtering. Glob patterns are relative to path: * stays within one path segment and ** crosses directories. Relative paths resolve from ~/AgentDock; absolute and ~/ paths use Host rules."), Annotations: readOnlyToolAnnotations(false), Handler: ctxToolHandler((*Runtime).listDir)},
 		{Name: "search_text", Title: "Search text", Description: toolfile.ToolDescription("Search UTF-8 files for text or regex matches. Relative paths search ~/AgentDock by default; absolute paths are allowed."), Annotations: readOnlyToolAnnotations(false), Handler: ctxToolHandler((*Runtime).searchText)},
@@ -191,7 +196,7 @@ func allToolSpecs() []ToolSpec {
 		{Name: "mcp_manage", Title: "Manage dynamic MCP servers", Description: "Register, inspect, enable, disable, refresh, remove, or manage the isolated environment of dynamic MCP servers. Dynamic MCP tools remain separate from AgentDock built-in tools.", Annotations: mutatingToolAnnotations(true, true), Handler: func(ctx context.Context, r *Runtime, args map[string]any) (Result, error) {
 			return r.dynamicMCP.Manage(ctx, args)
 		}},
-		{Name: "mcp_tool_search", Title: "Search dynamic MCP tools", Description: "Search lightweight tool summaries from enabled dynamic MCP servers. Use a server name from agentdock_context when possible.", Annotations: readOnlyToolAnnotations(true), Handler: func(ctx context.Context, r *Runtime, args map[string]any) (Result, error) {
+		{Name: "mcp_tool_search", Title: "Search dynamic MCP tools", Description: "Search lightweight tool summaries from enabled dynamic MCP servers. Use a server name from runtime_context when possible.", Annotations: readOnlyToolAnnotations(true), Handler: func(ctx context.Context, r *Runtime, args map[string]any) (Result, error) {
 			return r.dynamicMCP.Search(ctx, args)
 		}},
 		{Name: "mcp_tool_inspect", Title: "Inspect a dynamic MCP tool", Description: "Read the complete schema for one dynamic MCP tool identified as <server>:<tool>.", Annotations: readOnlyToolAnnotations(true), Handler: func(ctx context.Context, r *Runtime, args map[string]any) (Result, error) {

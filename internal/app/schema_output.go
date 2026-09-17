@@ -13,7 +13,7 @@ func OutputSchema(name string) map[string]any {
 	if schema, ok := codingOutputSchema(name); ok {
 		return schema
 	}
-	if name == mcpcontract.ToolAgentDockContext {
+	if name == "runtime_context" || name == mcpcontract.ToolAgentDockContext {
 		return mcpcontract.LocalAgentDockContextOutputSchema()
 	}
 	if schema, ok := mcpcontract.OutputSchema(name); ok {

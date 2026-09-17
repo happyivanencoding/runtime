@@ -18,7 +18,7 @@ Skill 负责说明“应该怎样做”；工具负责真实执行。包内脚�
 AgentDock 的适配链路是：
 
 ```text
-agentdock_context
+runtime_context
 → read_file skill://<name>/SKILL.md
 → 模型理解流程
 → exec_command skill=<name> / file_edit / 浏览器 / MCP 等真实工具
@@ -225,7 +225,7 @@ AgentDock 将环境值保存在独立私有目录，通过 `skill_package env_*`
 
 - `skill_package validate` 返回 `valid: true`；
 - `skill_package install` 成功并激活预期版本；
-- `agentdock_context` 出现正确名称和描述；
+- `runtime_context` 出现正确名称和描述；
 - `read_file skill://<name>/SKILL.md` 返回当前正文；
 - 当前激活包引用可读取；
 - `exec_command skill=<name>` 能从激活包根目录运行只读检查。

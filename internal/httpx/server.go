@@ -70,7 +70,7 @@ func Serve(ctx context.Context, server *mcp.Server, cfg config.Config) error {
 		publicArtifactStore.ServeHTTP(w, r, "/artifacts/public/")
 	})
 	registerOAuthRoutes(mux, cfg, oauthStore)
-	mux.HandleFunc("/context", agentDockContextHandler(server, cfg, oauthStore))
+	mux.HandleFunc("/context", runtimeContextHandler(server, cfg, oauthStore))
 	registerRuntimeAPI(mux, server, cfg, oauthStore)
 	mux.HandleFunc("/mcp", mcpEndpointHandler(server, cfg, oauthStore))
 
@@ -262,7 +262,7 @@ func newHTTPServer(addr string, handler http.Handler) *http.Server {
 	}
 }
 
-func agentDockContextHandler(server *mcp.Server, cfg config.Config, oauthStore *auth.OAuthStore) http.HandlerFunc {
+func runtimeContextHandler(server *mcp.Server, cfg config.Config, oauthStore *auth.OAuthStore) http.HandlerFunc {
 	authorizer := auth.Bearer{Token: cfg.AuthToken}
 	authRequired := cfg.AuthRequired()
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +279,7 @@ func agentDockContextHandler(server *mcp.Server, cfg config.Config, oauthStore *
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 		defer cancel()
-		result, err := server.AgentDockContext(ctx)
+		result, err := server.RuntimeContext(ctx)
 		if err != nil {
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 			return

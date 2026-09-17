@@ -50,7 +50,7 @@ func (r *Runtime) RuntimeTaskDelete(id string) (Result, error) {
 }
 
 func (r *Runtime) RuntimeCapabilities(ctx context.Context, refresh bool) (Result, error) {
-	result, err := r.AgentDockContext(ctx)
+	result, err := r.RuntimeContext(ctx)
 	if err != nil {
 		return nil, err
 	}

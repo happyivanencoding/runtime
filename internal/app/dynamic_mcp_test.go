@@ -97,9 +97,9 @@ func TestDynamicMCPToolsStaySeparateAndAppearLightweightInContext(t *testing.T) 
 	}
 	assertToolResultMatchesOutputSchema(t, "mcp_manage", added)
 
-	contextResult, err := runtime.Call(context.Background(), "agentdock_context", map[string]any{})
+	contextResult, err := runtime.Call(context.Background(), "runtime_context", map[string]any{})
 	if err != nil {
-		t.Fatalf("agentdock_context: %v", err)
+		t.Fatalf("runtime_context: %v", err)
 	}
 	var contextData capabilityContext
 	if err := remarshal(contextResult, &contextData); err != nil {
@@ -114,13 +114,13 @@ func TestDynamicMCPToolsStaySeparateAndAppearLightweightInContext(t *testing.T) 
 	}
 	for _, forbidden := range []string{upstream.URL, "streamable_http", "demo:echo", "inputSchema"} {
 		if strings.Contains(string(encodedContext), forbidden) {
-			t.Fatalf("agentdock_context leaked %q: %s", forbidden, encodedContext)
+			t.Fatalf("runtime_context leaked %q: %s", forbidden, encodedContext)
 		}
 	}
 	rules := strings.Join(contextData.Rules, "\n")
 	for _, required := range []string{"mcp_tool_search", "mcp_tool_inspect", "mcp_tool_call"} {
 		if !strings.Contains(rules, required) {
-			t.Fatalf("agentdock_context rules missing %q: %s", required, rules)
+			t.Fatalf("runtime_context rules missing %q: %s", required, rules)
 		}
 	}
 

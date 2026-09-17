@@ -10,7 +10,7 @@ type UIBinding struct {
 }
 
 var toolUIBindings = map[string]UIBinding{
-	"agentdock_context":        {ResourceURI: protocol.ContextUIResourceURI},
+	"runtime_context":        {ResourceURI: protocol.ContextUIResourceURI},
 	"file_replace":             {ResourceURI: protocol.FileChangeUIResourceURI},
 	"file_patch":               {ResourceURI: protocol.FileChangeUIResourceURI},
 	"file_add":                 {ResourceURI: protocol.FileChangeUIResourceURI},

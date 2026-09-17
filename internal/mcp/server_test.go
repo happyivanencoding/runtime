@@ -260,25 +260,25 @@ func TestOfficialSDKServerListsAndCallsAgentDockTools(t *testing.T) {
 		t.Fatalf("Connect() error = %v", err)
 	}
 
-	foundAgentDockContext := false
+	foundRuntimeContext := false
 	foundFilePublishMetadata := false
 	for tool, err := range session.Tools(t.Context(), nil) {
 		if err != nil {
 			t.Fatalf("Tools() error = %v", err)
 		}
 		switch tool.Name {
-		case "agentdock_context":
-			foundAgentDockContext = true
+		case "runtime_context":
+			foundRuntimeContext = true
 		case "file_publish":
 			paths, _ := tool.Meta["openai/fileParams"].([]any)
 			foundFilePublishMetadata = len(paths) == 1 && paths[0] == "file"
 		}
 	}
-	if !foundAgentDockContext || !foundFilePublishMetadata {
-		t.Fatalf("tool discovery incomplete: agentdock_context=%v file_publish_meta=%v", foundAgentDockContext, foundFilePublishMetadata)
+	if !foundRuntimeContext || !foundFilePublishMetadata {
+		t.Fatalf("tool discovery incomplete: runtime_context=%v file_publish_meta=%v", foundRuntimeContext, foundFilePublishMetadata)
 	}
 
-	result, err := session.CallTool(t.Context(), &mcpsdk.CallToolParams{Name: "agentdock_context", Arguments: map[string]any{}})
+	result, err := session.CallTool(t.Context(), &mcpsdk.CallToolParams{Name: "runtime_context", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatalf("CallTool() error = %v", err)
 	}

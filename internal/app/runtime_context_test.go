@@ -14,7 +14,7 @@ import (
 	"github.com/uvwt/agentdock/internal/config"
 )
 
-func TestAgentDockContextToolReturnsStructuredRuntimeIndex(t *testing.T) {
+func TestRuntimeContextToolReturnsStructuredRuntimeIndex(t *testing.T) {
 	cfg := config.Config{
 		AgentDockDefaultDir: t.TempDir(),
 		AgentDockHome:       filepath.Join(t.TempDir(), ".agentdock"),
@@ -28,12 +28,12 @@ func TestAgentDockContextToolReturnsStructuredRuntimeIndex(t *testing.T) {
 	}
 	installDocumentSkillForTest(t, rt, "demo-skill", "1.0.0", "Use this Skill for context index tests.")
 
-	result, err := rt.Call(context.Background(), "agentdock_context", map[string]any{})
+	result, err := rt.Call(context.Background(), "runtime_context", map[string]any{})
 	if err != nil {
-		t.Fatalf("agentdock_context call failed: %v", err)
+		t.Fatalf("runtime_context call failed: %v", err)
 	}
 	if _, legacy := result["context"]; legacy {
-		t.Fatalf("agentdock_context still exposes legacy Markdown context: %#v", result)
+		t.Fatalf("runtime_context still exposes legacy Markdown context: %#v", result)
 	}
 	var got capabilityContext
 	if err := remarshal(result, &got); err != nil {
@@ -71,7 +71,7 @@ func TestAgentDockContextToolReturnsStructuredRuntimeIndex(t *testing.T) {
 	}
 }
 
-func TestAgentDockContextExposesShortACPOrientationWhenEnabled(t *testing.T) {
+func TestRuntimeContextExposesShortACPOrientationWhenEnabled(t *testing.T) {
 	disabled := config.Config{
 		AgentDockDefaultDir: t.TempDir(),
 		AgentDockHome:       filepath.Join(t.TempDir(), ".agentdock"),
@@ -85,7 +85,7 @@ func TestAgentDockContextExposesShortACPOrientationWhenEnabled(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = disabledRuntime.Close() })
 
-	disabledResult, err := disabledRuntime.Call(context.Background(), "agentdock_context", map[string]any{})
+	disabledResult, err := disabledRuntime.Call(context.Background(), "runtime_context", map[string]any{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestAgentDockContextExposesShortACPOrientationWhenEnabled(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = enabledRuntime.Close() })
 
-	enabledResult, err := enabledRuntime.Call(context.Background(), "agentdock_context", map[string]any{})
+	enabledResult, err := enabledRuntime.Call(context.Background(), "runtime_context", map[string]any{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestNexusUnavailableHidesWorkflowTemplateCapability(t *testing.T) {
 		t.Fatalf("task_manage should remain available without Nexus: %s", toolNames)
 	}
 
-	result, err := rt.Call(context.Background(), "agentdock_context", map[string]any{})
+	result, err := rt.Call(context.Background(), "runtime_context", map[string]any{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestNexusAvailableExposesWorkflowAndRecallContext(t *testing.T) {
 		t.Fatalf("workflow_template_manage should be available with Nexus: %s", toolNames)
 	}
 
-	result, err := rt.Call(context.Background(), "agentdock_context", map[string]any{})
+	result, err := rt.Call(context.Background(), "runtime_context", map[string]any{})
 	if err != nil {
 		t.Fatal(err)
 	}

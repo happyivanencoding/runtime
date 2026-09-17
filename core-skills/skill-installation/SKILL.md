@@ -224,7 +224,7 @@ version: 1.2.0
 
 1. `skill_package install` 返回成功并激活预期版本；
 2. 当前 Skill 状态中的 `active_version` 与预期一致；
-3. `agentdock_context` 中出现正确名称和描述；
+3. `runtime_context` 中出现正确名称和描述；
 4. `read_file skill://<name>/SKILL.md` 可读取，并显示预期版本正文；
 5. 包内引用可通过 `skill://<name>/...` 读取；
 6. 当前已安装包摘要与审查时源码摘要一致；
@@ -269,7 +269,7 @@ version: 1.2.0
 
 - `active_version` 已切回预期版本；
 - `skill://<name>/SKILL.md` 读取的是回滚版本；
-- `agentdock_context` 描述与回滚版本一致；
+- `runtime_context` 描述与回滚版本一致；
 - 新版本私有状态没有被误删；
 - `~/.agentdock/env/skill/<skill-name>.env` 没有被覆盖；
 - 旧版本的必填环境变量仍完整；
@@ -290,7 +290,7 @@ version: 1.2.0
 - 没有 `blocked` 项；
 - `skill_package validate` 通过；
 - 安装或回滚后的当前激活版本正确；
-- `agentdock_context` 和 `skill://` 验证通过；
+- `runtime_context` 和 `skill://` 验证通过；
 - 必填环境配置完整且未泄露值；
 - 有辅助脚本时只读 `status` 通过；
 - 环境和私有状态未被安装、更新或回滚错误覆盖。

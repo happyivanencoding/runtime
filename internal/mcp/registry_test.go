@@ -82,7 +82,7 @@ func TestRuntimeExposesSingleToolSet(t *testing.T) {
 	for _, name := range rt.ToolNames() {
 		seen[name] = true
 	}
-	for _, name := range []string{"agentdock_context", "session_observe", "session_act", "recall_read", "recall_write", "skill_package", "mcp_manage", "mcp_tool_search", "mcp_tool_inspect", "mcp_tool_call"} {
+	for _, name := range []string{"runtime_context", "session_observe", "session_act", "recall_read", "recall_write", "skill_package", "mcp_manage", "mcp_tool_search", "mcp_tool_inspect", "mcp_tool_call"} {
 		if !seen[name] {
 			t.Fatalf("single tool set missing %s: %#v", name, seen)
 		}
@@ -94,35 +94,35 @@ func TestRuntimeExposesSingleToolSet(t *testing.T) {
 	}
 }
 
-func TestAgentDockContextSchemaIsStructuredEntrypoint(t *testing.T) {
-	def, ok := toolDefinition("agentdock_context")
+func TestRuntimeContextSchemaIsStructuredEntrypoint(t *testing.T) {
+	def, ok := toolDefinition("runtime_context")
 	if !ok {
-		t.Fatal("agentdock_context definition missing")
+		t.Fatal("runtime_context definition missing")
 	}
 	if !strings.Contains(def.Description, "structured Runtime bootstrap context") {
-		t.Fatalf("agentdock_context description should explain structured bootstrap use: %q", def.Description)
+		t.Fatalf("runtime_context description should explain structured bootstrap use: %q", def.Description)
 	}
 
-	inputProps := schemaProperties(t, "agentdock_context")
+	inputProps := schemaProperties(t, "runtime_context")
 	if len(inputProps) != 0 {
-		t.Fatalf("agentdock_context input schema should not expose node-local selectors: %#v", inputProps)
+		t.Fatalf("runtime_context input schema should not expose node-local selectors: %#v", inputProps)
 	}
-	output := outputSchema("agentdock_context")
+	output := outputSchema("runtime_context")
 	outputProps, ok := output["properties"].(map[string]any)
 	if !ok {
-		t.Fatal("agentdock_context output schema properties missing")
+		t.Fatal("runtime_context output schema properties missing")
 	}
 	for _, name := range []string{"runtime", "skills", "dynamic_mcp", "acp", "workflow_templates", "recall", "rules", "warnings"} {
 		if _, ok := outputProps[name]; !ok {
-			t.Fatalf("agentdock_context output schema missing %q: %#v", name, outputProps)
+			t.Fatalf("runtime_context output schema missing %q: %#v", name, outputProps)
 		}
 	}
 	if _, legacy := outputProps["context"]; legacy {
-		t.Fatalf("agentdock_context output schema still exposes legacy Markdown context: %#v", outputProps)
+		t.Fatalf("runtime_context output schema still exposes legacy Markdown context: %#v", outputProps)
 	}
 	required, ok := output["required"].([]string)
 	if !ok || !reflect.DeepEqual(required, []string{"runtime", "skills", "dynamic_mcp", "workflow_templates", "rules"}) {
-		t.Fatalf("agentdock_context output schema required = %#v", output["required"])
+		t.Fatalf("runtime_context output schema required = %#v", output["required"])
 	}
 }
 
@@ -177,7 +177,7 @@ func TestPrivateNoteManageIsHiddenWithoutNexus(t *testing.T) {
 
 func TestRecallBootstrapIsNotModelFacing(t *testing.T) {
 	if _, ok := toolDefinition("recall_bootstrap"); ok {
-		t.Fatal("recall_bootstrap should be absorbed by agentdock_context")
+		t.Fatal("recall_bootstrap should be absorbed by runtime_context")
 	}
 }
 

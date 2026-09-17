@@ -14,6 +14,10 @@ func InputSchema(name string) map[string]any {
 	if schema, ok := codingInputSchema(name); ok {
 		return schema
 	}
+	if name == "runtime_context" {
+		schema, _ := mcpcontract.InputSchema(mcpcontract.ToolAgentDockContext)
+		return schema
+	}
 	if schema, ok := mcpcontract.InputSchema(name); ok {
 		return withCodingContext(name, schema)
 	}
@@ -284,7 +288,7 @@ func InputSchema(name string) map[string]any {
 	case "mcp_manage":
 		props["action"] = map[string]any{"type": "string", "description": "Dynamic MCP server or isolated environment action.", "enum": []string{"list", "inspect", "add", "remove", "enable", "disable", "env_set", "env_unset", "env_list", "refresh"}}
 		props["name"] = stringProp("Dynamic MCP server name. Use a stable short identifier such as figma or github.")
-		props["description"] = stringProp("Short capability description shown in agentdock_context.")
+		props["description"] = stringProp("Short capability description shown in runtime_context.")
 		props["transport"] = map[string]any{"type": "string", "description": "MCP transport for action=add.", "enum": []string{"streamable_http", "stdio"}}
 		props["url"] = stringProp("Absolute MCP endpoint URL for transport=streamable_http.")
 		props["command"] = stringProp("Executable name or path for transport=stdio.")
@@ -299,7 +303,7 @@ func InputSchema(name string) map[string]any {
 		required = []string{"action"}
 	case "mcp_tool_search":
 		props["query"] = stringProp("Capability or tool query.")
-		props["server"] = stringProp("Optional dynamic MCP server name from agentdock_context.")
+		props["server"] = stringProp("Optional dynamic MCP server name from runtime_context.")
 		props["limit"] = boundedIntProp("Maximum matching tools. Defaults to 10 and is capped at 100.", 1, 100)
 		required = []string{"query"}
 	case "mcp_tool_inspect":

@@ -11,17 +11,17 @@ import (
 	"github.com/uvwt/agentdock/internal/config"
 )
 
-func (r *Runtime) AgentDockContext(ctx context.Context) (Result, error) {
-	return r.agentDockContext(ctx, false)
+func (r *Runtime) RuntimeContext(ctx context.Context) (Result, error) {
+	return r.runtimeContext(ctx, false)
 }
 
 // AgentDockLocalContext 仅供 Nexus Bridge 使用。它不读取 Nexus 统一管理的
 // Workflow/Recall，避免 fleet 聚合时按节点重复回灌共享上下文。
 func (r *Runtime) AgentDockLocalContext(ctx context.Context) (Result, error) {
-	return r.agentDockContext(ctx, true)
+	return r.runtimeContext(ctx, true)
 }
 
-func (r *Runtime) agentDockContext(ctx context.Context, nexusLocalOnly bool) (Result, error) {
+func (r *Runtime) runtimeContext(ctx context.Context, nexusLocalOnly bool) (Result, error) {
 	skills, skillErr := r.skillCapabilityIndex()
 	contextResult := capabilityContext{
 		Skills:            skills,
@@ -89,8 +89,8 @@ func (r *Runtime) agentDockContext(ctx context.Context, nexusLocalOnly bool) (Re
 	return result, nil
 }
 
-func (r *Runtime) agentDockContextTool(ctx context.Context, _ map[string]any) (Result, error) {
-	return r.AgentDockContext(ctx)
+func (r *Runtime) runtimeContextTool(ctx context.Context, _ map[string]any) (Result, error) {
+	return r.RuntimeContext(ctx)
 }
 
 type capabilityContext struct {
