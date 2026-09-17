@@ -71,6 +71,33 @@ func TestRuntimeContextToolReturnsStructuredRuntimeIndex(t *testing.T) {
 	}
 }
 
+func TestAgentDockContextCompatibilityAlias(t *testing.T) {
+	cfg := config.Config{
+		AgentDockDefaultDir: t.TempDir(),
+		AgentDockHome:       filepath.Join(t.TempDir(), ".agentdock"),
+	}
+	if err := cfg.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	rt, err := NewRuntime(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rt.Close() })
+
+	result, err := rt.Call(context.Background(), "agentdock_context", map[string]any{})
+	if err != nil {
+		t.Fatalf("agentdock_context compatibility call failed: %v", err)
+	}
+	var got capabilityContext
+	if err := remarshal(result, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Runtime == nil || got.Runtime.Version == "" || got.Rules == nil {
+		t.Fatalf("agentdock_context compatibility result is incomplete: %#v", got)
+	}
+}
+
 func TestRuntimeContextExposesShortACPOrientationWhenEnabled(t *testing.T) {
 	disabled := config.Config{
 		AgentDockDefaultDir: t.TempDir(),

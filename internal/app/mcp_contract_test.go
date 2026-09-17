@@ -17,7 +17,7 @@ func TestCanonicalToolDefinitionsMatchSharedContract(t *testing.T) {
 
 	definitions := make(map[string]ToolDefinition, len(canonicalNames))
 	for _, definition := range ToolDefinitions() {
-		if mcpcontract.IsCanonicalTool(definition.Name) {
+		if definition.Name != mcpcontract.ToolAgentDockContext && mcpcontract.IsCanonicalTool(definition.Name) {
 			definitions[definition.Name] = definition
 		}
 	}
