@@ -143,7 +143,7 @@ try {
     $runtimeWasRunning = [bool](Test-OwnedPid $runtimePidFile $runtimeBinary)
     if (-not $runtimeWasRunning) { Start-RuntimeHttpWrapper }
 
-    $localReady = Wait-ForContext ([string]$config.local_origin) $token 15
+    $localReady = Wait-ForContext ([string]$config.local_origin) $token 30
     $localMcpReady = if($localReady){Wait-ForMCP ([string]$config.local_mcp_url) $token 15}else{$false}
     $runtimeUp = [bool](Test-OwnedPid $runtimePidFile $runtimeBinary)
     if (-not $runtimeUp -or -not $localReady -or -not $localMcpReady) {
