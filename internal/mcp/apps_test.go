@@ -169,11 +169,15 @@ func TestMCPAppsBindResourcesDirectlyToBusinessTools(t *testing.T) {
 		t.Fatal("tools/list did not expose runtime_context")
 	}
 	assertToolUIResource(t, contextTool, protocol.ContextUIResourceURI)
-	fileEditTool := tools["file_edit"]
-	if fileEditTool == nil {
-		t.Fatal("tools/list did not expose file_edit")
+	for _, name := range []string{"file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit"} {
+		tool := tools[name]
+		if tool == nil {
+			t.Fatalf("tools/list did not expose %s", name)
+		}
+		if tool.Meta["ui"] != nil {
+			t.Fatalf("%s should not auto-bind an Apps UI because file mutations are high-frequency: %#v", name, tool.Meta)
+		}
 	}
-	assertToolUIResource(t, fileEditTool, protocol.FileChangeUIResourceURI)
 	taskManageTool := tools["task_manage"]
 	if taskManageTool == nil {
 		t.Fatal("tools/list did not expose task_manage")

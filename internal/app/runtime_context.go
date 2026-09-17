@@ -75,7 +75,7 @@ func (r *Runtime) runtimeContext(ctx context.Context, nexusLocalOnly bool) (Resu
 		)
 	}
 
-	contextResult.Rules = append(contextResult.Rules, "任务执行过程中，在形成有恢复价值的断点时调用 task_manage checkpoint；可用 completed_step_ids/current_step_id 原子批量更新，final_review=pass 不会自动补全未完成步骤。")
+	contextResult.Rules = append(contextResult.Rules, "复杂多步骤任务只在阶段边界、真实阻塞或形成有恢复价值的断点时调用 task_manage checkpoint；不要按单个文件、命令或每次工具调用逐条上报。优先用 completed_step_ids/current_step_id 一次批量推进多个步骤，final_review=pass 不会自动补全未完成步骤。")
 	if requiresNexus(r.cfg) && !nexusLocalOnly {
 		contextResult.Rules = append(contextResult.Rules,
 			"记忆启动索引只提供紧凑背景与资料入口；索引已给出具体 path 时优先 recall_read 该条目，只有索引未覆盖且任务依赖具体历史事实时才 recall_search，索引信息已足够时不要机械检索。",

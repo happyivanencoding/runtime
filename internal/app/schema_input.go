@@ -146,7 +146,7 @@ func InputSchema(name string) map[string]any {
 		props["chars"] = stringProp("Characters to write when action=write.")
 		props["max_output_bytes"] = boundedIntProp("Maximum output bytes. Defaults to 65536 and is capped at 4194304.", 1, toolcommand.MaxOutputBytes)
 	case "task_manage":
-		props["action"] = map[string]any{"type": "string", "description": "Task lifecycle action. Use checkpoint to update live step progress.", "enum": []string{"create", "list", "get", "checkpoint", "block", "resume", "final_review", "complete"}}
+		props["action"] = map[string]any{"type": "string", "description": "Task lifecycle action. Use checkpoint sparingly for coarse phase/recovery progress; batch step updates instead of reporting each file, command, or tool call.", "enum": []string{"create", "list", "get", "checkpoint", "block", "resume", "final_review", "complete"}}
 		props["task_id"] = stringProp("Persistent task id for get, checkpoint, block, resume, final_review, or complete.")
 		props["title"] = stringProp("Short task title for create.")
 		props["goal"] = stringProp("Fixed task goal for create.")

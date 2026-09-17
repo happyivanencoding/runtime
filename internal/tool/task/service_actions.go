@@ -204,7 +204,7 @@ func (s *Service) Manage(ctx context.Context, args map[string]any) (Result, erro
 		task, evolutionWarning = s.refreshGuidanceBestEffort(ctx, task)
 		result := Result{
 			"action": input.Action, "task_id": task.ID, "task_summary": compactTaskSummary(task), "state_dir": s.tasks.Root(),
-			"next_required_action": "Use checkpoint at meaningful recovery points; completed_step_ids/current_step_id can update several steps atomically. Use block only for a real blocker. After all steps and real verification are complete, call final_review, then complete.",
+			"next_required_action": "Use checkpoint only at phase boundaries, real blockers, or meaningful recovery points; do not report each file, command, or tool call. Prefer completed_step_ids/current_step_id to advance several steps atomically. After all steps and real verification are complete, call final_review, then complete.",
 		}
 		if len(task.GuidanceContext) > 0 {
 			result["guidance_context"] = task.GuidanceContext

@@ -11,12 +11,6 @@ type UIBinding struct {
 
 var toolUIBindings = map[string]UIBinding{
 	"runtime_context":        {ResourceURI: protocol.ContextUIResourceURI},
-	"file_replace":             {ResourceURI: protocol.FileChangeUIResourceURI},
-	"file_patch":               {ResourceURI: protocol.FileChangeUIResourceURI},
-	"file_add":                 {ResourceURI: protocol.FileChangeUIResourceURI},
-	"file_delete":              {ResourceURI: protocol.FileChangeUIResourceURI},
-	"file_move":                {ResourceURI: protocol.FileChangeUIResourceURI},
-	"file_edit":                {ResourceURI: protocol.FileChangeUIResourceURI},
 	"task_manage":              {ResourceURI: protocol.TaskProgressUIResourceURI},
 	"acp_session":              {ResourceURI: protocol.ACPStatusUIResourceURI},
 	"workflow_template_manage": {ResourceURI: protocol.WorkflowUIResourceURI, Action: "match"},
