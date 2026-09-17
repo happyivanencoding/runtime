@@ -319,6 +319,23 @@ func TestOfficialSDKServerListsAndCallsAgentDockTools(t *testing.T) {
 		t.Fatalf("receipt = %#v", receipt)
 	}
 
+	telemetryPath := filepath.Join(cfg.AgentDockHome, "telemetry", "runtime-routing.jsonl")
+	telemetryData, err := os.ReadFile(telemetryPath)
+	if err != nil {
+		t.Fatalf("read routing telemetry: %v", err)
+	}
+	telemetryText := string(telemetryData)
+	for _, marker := range []string{`"backend":"runtime"`, `"source":"runtime_http"`, `"event":"tool_finished"`, `"tool":"runtime_context"`} {
+		if !strings.Contains(telemetryText, marker) {
+			t.Fatalf("routing telemetry missing %s: %s", marker, telemetryText)
+		}
+	}
+	for _, forbidden := range []string{"test-mutation-key-0001", mutationPath, "once"} {
+		if strings.Contains(telemetryText, forbidden) {
+			t.Fatalf("routing telemetry leaked invocation data %q: %s", forbidden, telemetryText)
+		}
+	}
+
 	if err := session.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}

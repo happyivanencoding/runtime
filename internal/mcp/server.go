@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	sdkjsonrpc "github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -20,18 +21,25 @@ import (
 	"github.com/uvwt/agentdock/internal/mcpreceipt"
 	"github.com/uvwt/agentdock/internal/publicartifacts"
 	"github.com/uvwt/agentdock/internal/requestid"
+	"github.com/uvwt/agentdock/internal/telemetry"
 )
 
 type Server struct {
 	runtime     *app.Runtime
 	cfg         config.Config
 	receipts    *mcpreceipt.Store
+	routing     *telemetry.RoutingWriter
 	sdk         *mcpsdk.Server
 	httpHandler http.Handler
 }
 
 func NewServer(runtime *app.Runtime, cfg config.Config) *Server {
-	server := &Server{runtime: runtime, cfg: cfg, receipts: mcpreceipt.New(cfg.AgentDockHome)}
+	server := &Server{
+		runtime:  runtime,
+		cfg:      cfg,
+		receipts: mcpreceipt.New(cfg.AgentDockHome),
+		routing:  telemetry.NewRoutingWriter(cfg.AgentDockHome, cfg.Stdio),
+	}
 	serverOptions := &mcpsdk.ServerOptions{
 		Capabilities: &mcpsdk.ServerCapabilities{},
 		Instructions: serverInstructions(cfg.NexusEndpoint != "", cfg.Instructions),
@@ -206,6 +214,29 @@ func (s *Server) registerTool(name string, cfg config.Config) {
 func (s *Server) callTool(ctx context.Context, name string, request *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 	started := time.Now()
 	ctx, requestID := requestid.Ensure(ctx)
+	probe := strings.HasPrefix(requestID, "health-")
+	targetServer, targetTool := "", ""
+	routingCompleted := false
+	defer func() {
+		if routingCompleted {
+			return
+		}
+		ok := false
+		if err := s.routing.Write(telemetry.RoutingEvent{
+			Event:         "tool_finished",
+			Tool:          name,
+			RequestID:     requestID,
+			DurationMS:    time.Since(started).Milliseconds(),
+			OK:            &ok,
+			ErrorCode:     "MCP_REQUEST_REJECTED",
+			ErrorCategory: "validation",
+			TargetServer:  targetServer,
+			TargetTool:    targetTool,
+			Probe:         probe,
+		}); err != nil {
+			slog.Warn("routing telemetry write failed", "phase", "rejected", "tool", name, "request_id", requestID)
+		}
+	}()
 	arguments := map[string]any{}
 	if request != nil && request.Params != nil && len(request.Params.Arguments) > 0 && string(request.Params.Arguments) != "null" {
 		if err := json.Unmarshal(request.Params.Arguments, &arguments); err != nil {
@@ -218,6 +249,7 @@ func (s *Server) callTool(ctx context.Context, name string, request *mcpsdk.Call
 	for key, value := range arguments {
 		runtimeArguments[key] = value
 	}
+	targetServer, targetTool = routingTarget(name, runtimeArguments)
 
 	def, hasDefinition := toolDefinition(name)
 	idempotencyKey := ""
@@ -287,6 +319,33 @@ func (s *Server) callTool(ctx context.Context, name string, request *mcpsdk.Call
 		finishedAttrs = append(finishedAttrs, "error", err)
 	}
 	slog.Info("tool finished", finishedAttrs...)
+	finishedOK := err == nil
+	routingEvent := telemetry.RoutingEvent{
+		Event:        "tool_finished",
+		Tool:         name,
+		RequestID:    requestID,
+		DurationMS:   time.Since(started).Milliseconds(),
+		OK:           &finishedOK,
+		TargetServer: targetServer,
+		TargetTool:   targetTool,
+		Probe:        probe,
+	}
+	if err != nil {
+		var toolErr *app.ToolError
+		if errors.As(err, &toolErr) {
+			routingEvent.ErrorCode = toolErr.Code
+			routingEvent.ErrorCategory = toolErr.Category
+			retryable := toolErr.Retryable
+			routingEvent.Retryable = &retryable
+		} else {
+			routingEvent.ErrorCode = "RUNTIME_TOOL_ERROR"
+			routingEvent.ErrorCategory = "runtime"
+		}
+	}
+	routingCompleted = true
+	if telemetryErr := s.routing.Write(routingEvent); telemetryErr != nil {
+		slog.Warn("routing telemetry write failed", "phase", "finish", "tool", name, "request_id", requestID)
+	}
 
 	if encodeErr != nil {
 		return nil, fmt.Errorf("encode MCP tool result: %w", encodeErr)
@@ -305,6 +364,23 @@ func (s *Server) callTool(ctx context.Context, name string, request *mcpsdk.Call
 	}
 	response.Meta = meta
 	return &response, nil
+}
+
+func routingTarget(name string, args map[string]any) (string, string) {
+	if name == "mcp_tool_search" {
+		server, _ := args["server"].(string)
+		return strings.TrimSpace(server), ""
+	}
+	if name != "mcp_tool_call" && name != "mcp_tool_inspect" {
+		return "", ""
+	}
+	qualified, _ := args["name"].(string)
+	qualified = strings.TrimSpace(qualified)
+	server, tool, found := strings.Cut(qualified, ":")
+	if !found {
+		return "", qualified
+	}
+	return strings.TrimSpace(server), strings.TrimSpace(tool)
 }
 
 func callToolProblem(name, requestID, code, message string, details map[string]any) (*mcpsdk.CallToolResult, error) {

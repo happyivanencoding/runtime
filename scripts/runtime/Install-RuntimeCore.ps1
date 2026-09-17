@@ -45,6 +45,9 @@ foreach ($name in @(
     'Start-RuntimeForChatGPT.ps1',
     'Recover-RuntimeForChatGPT.ps1',
     'Install-RuntimeRecoveryTask.ps1',
+    'Collect-AgentDockToolUsage.ps1',
+    'Install-RuntimeToolUsageCollector.ps1',
+    'Get-RuntimeToolTimeline.ps1',
     'Start-RuntimeAdministratorSession.ps1',
     'Stop-RuntimeForChatGPT.ps1',
     'Status-RuntimeForChatGPT.ps1'
