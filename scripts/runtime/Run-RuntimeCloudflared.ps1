@@ -23,10 +23,15 @@ $plain = [Security.Cryptography.ProtectedData]::Unprotect(
 try { $env:TUNNEL_TOKEN = [Text.Encoding]::UTF8.GetString($plain) }
 finally { [Array]::Clear($plain, 0, $plain.Length) }
 
-$process = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel','run') -PassThru -NoNewWindow
+$process = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel','--protocol','http2','run') -PassThru -NoNewWindow
 [IO.File]::WriteAllText((Join-Path $stateDir 'cloudflared.pid'), $process.Id.ToString(), [Text.UTF8Encoding]::new($false))
 try { $process.WaitForExit(); exit $process.ExitCode }
 finally {
-    Remove-Item -LiteralPath (Join-Path $stateDir 'cloudflared.pid') -Force -ErrorAction SilentlyContinue
+    $pidPath = Join-Path $stateDir 'cloudflared.pid'
+    try {
+        if (([IO.File]::ReadAllText($pidPath).Trim()) -eq $process.Id.ToString()) {
+            Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
     Remove-Item Env:TUNNEL_TOKEN -ErrorAction SilentlyContinue
 }

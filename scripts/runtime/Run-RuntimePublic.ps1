@@ -42,6 +42,11 @@ $process = Start-Process -FilePath $binary -PassThru -NoNewWindow
 [IO.File]::WriteAllText((Join-Path $stateDir 'runtime-http.pid'), $process.Id.ToString(), [Text.UTF8Encoding]::new($false))
 try { $process.WaitForExit(); exit $process.ExitCode }
 finally {
-    Remove-Item -LiteralPath (Join-Path $stateDir 'runtime-http.pid') -Force -ErrorAction SilentlyContinue
+    $pidPath = Join-Path $stateDir 'runtime-http.pid'
+    try {
+        if (([IO.File]::ReadAllText($pidPath).Trim()) -eq $process.Id.ToString()) {
+            Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
     foreach($key in 'AGENTDOCK_AUTH_TOKEN','AGENTDOCK_OAUTH_PASSWORD','AGENTDOCK_OAUTH_TOKEN_SECRET') { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
 }
