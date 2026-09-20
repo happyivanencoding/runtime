@@ -10,6 +10,10 @@ if (-not (Test-Path -LiteralPath $statusScript -PathType Leaf) -or -not (Test-Pa
 
 try {
     $live = (& $statusScript -RuntimeInstallDir $RuntimeInstallDir) | ConvertFrom-Json
+    if ($live.status -eq 'repair_required') {
+        [ordered]@{ status='repair_required'; reason=$live.failure_reason; action='none' } | ConvertTo-Json
+        return
+    }
     if ($live.status -eq 'connected') {
         [ordered]@{ status='connected'; action='none' } | ConvertTo-Json
         return

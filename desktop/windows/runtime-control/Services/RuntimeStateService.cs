@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
@@ -11,6 +12,8 @@ namespace Runtime.Control.Services;
 
 public sealed class RuntimeStateService
 {
+    private ConnectionHealth? _lastHealth;
+    private DateTimeOffset _nextHealthCheck;
     private const string NativeHostRegistryPath = @"Software\Google\Chrome\NativeMessagingHosts\com.runtime.browser_bridge";
     private const string RunRegistryPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string StartupValueName = "RuntimeControl";
@@ -76,6 +79,10 @@ public sealed class RuntimeStateService
         var cloudflareTunnelName = ReadString(publicConnection, "cloudflare_tunnel_name");
         var cloudflareTunnelId = ReadString(publicConnection, "cloudflare_tunnel_id");
         var cloudflareStatus = ReadString(publicConnection, "status");
+        var binaryExists = File.Exists(binaryPath);
+        var health = await ReadConnectionHealthAsync(binaryExists, cancellationToken);
+        cloudflareStatus = health.Status;
+        chatGptStatus = health.AppStatus(binaryExists, chatGptConfigured, chatGptStatus);
         var authMode = ReadString(publicConnection, "auth_mode");
         var runtimeAuthCredentialsImported =
             File.Exists(Path.Combine(SecretsDirectory, "auth-token.dpapi")) &&
@@ -95,7 +102,7 @@ public sealed class RuntimeStateService
             binaryPath,
             string.IsNullOrWhiteSpace(version) ? "unknown" : version,
             commit,
-            File.Exists(binaryPath),
+            binaryExists,
             runtimeProcessCount,
             bridgeConnected,
             bridgePid,
@@ -116,13 +123,56 @@ public sealed class RuntimeStateService
             runtimeAuthCredentialsImported,
             runtimeTunnelTokenConfigured,
             importedAgentDockTunnelTokenAvailable,
-            IsAnyProcessRunning("agentdock", "agentdock-tray"),
+            await IsAgentDockHealthyAsync(cancellationToken),
             codexAvailable,
             claudeAvailable,
             grokAvailable,
             IsCurrentProcessElevated(),
             IsStartupEnabled(),
-            DateTimeOffset.Now);
+            DateTimeOffset.Now,
+            health);
+    }
+
+    private async Task<ConnectionHealth> ReadConnectionHealthAsync(bool binaryExists, CancellationToken cancellationToken)
+    {
+        if (!binaryExists)
+        {
+            _nextHealthCheck = DateTimeOffset.MinValue;
+            return _lastHealth = new("repair_required", false, false, DateTimeOffset.Now);
+        }
+        if (_lastHealth is not null && DateTimeOffset.UtcNow < _nextHealthCheck) return _lastHealth;
+        var health = new ConnectionHealth("unknown", null, null, null);
+        if (File.Exists(StatusChatGptScript))
+        {
+            var info = new ProcessStartInfo("powershell.exe")
+            {
+                UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            foreach (var arg in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", StatusChatGptScript }) info.ArgumentList.Add(arg);
+            using var process = new Process { StartInfo = info };
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(25));
+            try
+            {
+                process.Start();
+                var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+                await process.WaitForExitAsync(timeout.Token);
+                await stderr;
+                if (process.ExitCode == 0) health = ConnectionHealth.FromJson(await stdout);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                // Failure to inspect the endpoint is unknown, never a cached Connected claim.
+            }
+        }
+        _nextHealthCheck = DateTimeOffset.UtcNow.AddSeconds(15);
+        return _lastHealth = health;
     }
 
     public async Task<string> RunChatGptActionAsync(string action, CancellationToken cancellationToken = default)
@@ -379,21 +429,19 @@ public sealed class RuntimeStateService
         return count;
     }
 
-    private static bool IsAnyProcessRunning(params string[] processNames)
+    private static async Task<bool> IsAgentDockHealthyAsync(CancellationToken cancellationToken)
     {
-        foreach (var name in processNames)
+        var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgentDock");
+        var manifest = await ReadJsonAsync(Path.Combine(root, "runtime.json"), cancellationToken);
+        if (!Uri.TryCreate(ReadString(manifest, "local_mcp_url"), UriKind.Absolute, out var mcp) ||
+            !mcp.IsLoopback || mcp.Scheme != "http") return false;
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        try
         {
-            var processes = Process.GetProcessesByName(name);
-            if (processes.Length > 0)
-            {
-                foreach (var process in processes)
-                {
-                    process.Dispose();
-                }
-                return true;
-            }
+            using var response = await client.GetAsync(new Uri(mcp, "/healthz"), cancellationToken);
+            return response.IsSuccessStatusCode;
         }
-        return false;
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { return false; }
     }
 
     private static string? FindExecutable(params string[] names)

@@ -72,6 +72,7 @@ function Test-AuthenticatedMCP([string]$McpUrl, [string]$Token, [int]$TimeoutSec
 $cloudflaredBinary = [string]$config.cloudflared_binary
 if ([string]::IsNullOrWhiteSpace($cloudflaredBinary)) { $cloudflaredBinary = Join-Path $RuntimeInstallDir 'bin\cloudflared.exe' }
 $runtimeUp = Test-OwnedPid (Join-Path $stateDir 'runtime-http.pid') ([string]$install.binary)
+$binaryExists = Test-Path -LiteralPath ([string]$install.binary) -PathType Leaf
 $cloudflareUp = Test-OwnedPid (Join-Path $stateDir 'cloudflared.pid') $cloudflaredBinary
 $authReady = (Test-Path (Join-Path $secretsDir 'auth-token.dpapi')) -and (Test-Path (Join-Path $secretsDir 'oauth-password.dpapi')) -and (Test-Path (Join-Path $secretsDir 'oauth-token-secret.dpapi'))
 $tunnelTokenReady = Test-Path (Join-Path $secretsDir 'cloudflared-token.dpapi')
@@ -86,7 +87,9 @@ try {
     Remove-Variable token -ErrorAction SilentlyContinue
 }
 
-$liveStatus = if($runtimeUp -eq $false -and $cloudflareUp -eq $false) {
+$liveStatus = if(-not $binaryExists) {
+    'repair_required'
+} elseif($runtimeUp -eq $false -and $cloudflareUp -eq $false) {
     'stopped'
 } elseif($runtimeUp -eq $null -or $cloudflareUp -eq $null) {
     'unknown'
@@ -108,6 +111,8 @@ if($null -ne $config.PSObject.Properties['last_recovery_at']) {
 [ordered]@{
     status = $liveStatus
     recorded_status = [string]$config.status
+    runtime_binary_exists = $binaryExists
+    failure_reason = $(if(-not $binaryExists){'runtime_binary_missing'}else{$null})
     public_mcp_url = [string]$config.public_mcp_url
     local_mcp_url = [string]$config.local_mcp_url
     cloudflare_tunnel_name = [string]$config.cloudflare_tunnel_name

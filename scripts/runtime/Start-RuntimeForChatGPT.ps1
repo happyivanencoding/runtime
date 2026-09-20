@@ -131,6 +131,12 @@ $install = Get-Content -LiteralPath (Join-Path $RuntimeInstallDir 'install.json'
 $runtimePidFile = Join-Path $stateDir 'runtime-http.pid'
 $cloudflarePidFile = Join-Path $stateDir 'cloudflared.pid'
 $runtimeBinary = [string]$install.binary
+if (-not (Test-Path -LiteralPath $runtimeBinary -PathType Leaf)) {
+    $config.status = 'repair_required'
+    $config.updated_at = [DateTimeOffset]::Now.ToString('o')
+    [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+    throw 'Runtime binary is missing. Repair the installation before starting; no processes were launched.'
+}
 $cloudflaredBinary = [string]$config.cloudflared_binary
 if ([string]::IsNullOrWhiteSpace($cloudflaredBinary)) { $cloudflaredBinary = Join-Path $RuntimeInstallDir 'bin\cloudflared.exe' }
 

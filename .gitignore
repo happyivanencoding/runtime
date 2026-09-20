@@ -23,6 +23,8 @@
 /desktop/windows/control-panel/obj/
 /desktop/windows/runtime-control/bin/
 /desktop/windows/runtime-control/obj/
+/desktop/windows/runtime-control-tests/bin/
+/desktop/windows/runtime-control-tests/obj/
 
 # Python 辅助脚本的本地缓存不得进入 Skill 源码和发布包。
 __pycache__/

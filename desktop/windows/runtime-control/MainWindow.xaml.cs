@@ -30,6 +30,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // The sidebar's Checked event fires before MainTabs exists during XAML loading.
+        MainTabs.SelectedIndex = 0;
 
         _trayIcon = new Forms.NotifyIcon
         {
@@ -157,11 +159,11 @@ public partial class MainWindow : Window
             : $"未找到 {state.BinaryPath}";
         CoreProcessText.Text = $"{state.RuntimeProcessCount} PROCESS{(state.RuntimeProcessCount == 1 ? string.Empty : "ES")}";
 
-        McpDot.Fill = runtimeUsable ? Success : Danger;
-        McpStatusText.Text = runtimeUsable ? "本地可用" : "不可用";
+        McpDot.Fill = state.Health.LocalReady ? Success : runtimeUsable ? Warning : Danger;
+        McpStatusText.Text = state.Health.LocalReady ? "已验证" : runtimeUsable ? "未就绪" : "不可用";
         McpDetailText.Text = runtimeUsable
-            ? JoinNonEmpty(" · ", "stdio", state.PublicLocalMcpUrl)
-            : "runtime-core.exe missing";
+            ? JoinNonEmpty(" · ", state.PublicLocalMcpUrl, HealthCheckTime(state.Health))
+            : "主程序缺失，请修复安装";
         McpCommandTextBox.Text = $"\"{state.BinaryPath}\" --stdio";
 
         BrowserDot.Fill = state.BridgeConnected ? Success : Warning;
@@ -202,18 +204,18 @@ public partial class MainWindow : Window
             : state.RuntimeTunnelTokenConfigured ? "TUNNEL OFFLINE" : "TUNNEL PENDING";
         ChatGptBadgeText.Foreground = cloudflareReady && state.ChatGptConfigured ? Success : Warning;
 
-        AgentDockDot.Fill = state.AgentDockRunning ? Success : Muted;
-        AgentDockStatusText.Text = state.AgentDockRunning ? "Available" : "未运行";
-        AgentDockConnectionText.Text = state.AgentDockRunning ? "AgentDock 正在运行" : "AgentDock 当前未运行";
-        AgentDockConnectionText.Foreground = state.AgentDockRunning ? Success : (Brush)FindResource("MutedTextBrush");
+        AgentDockDot.Fill = !runtimeUsable || !state.AgentDockHealthy ? Danger : Success;
+        AgentDockStatusText.Text = !runtimeUsable ? "Runtime 入口不可用" : state.AgentDockHealthy ? "AgentDock 后端在线" : "后端不可用";
+        AgentDockConnectionText.Text = state.AgentDockHealthy ? "AgentDock /healthz 已验证；Runtime 转发需单独验收" : "AgentDock 健康检查失败；托盘在线不代表后端可用";
+        AgentDockConnectionText.Foreground = state.AgentDockHealthy ? Success : Warning;
 
         AcpDetailText.Text = $"默认关闭 · Codex {(state.CodexAvailable ? "available" : "not found")}";
         ApplyAdapterState(CodexDot, CodexStatusText, state.CodexAvailable);
         ApplyAdapterState(ClaudeDot, ClaudeStatusText, state.ClaudeAvailable);
         ApplyAdapterState(GrokDot, GrokStatusText, state.GrokAvailable);
 
-        UiaDot.Fill = Success;
-        UiaStatusText.Text = "Ready";
+        UiaDot.Fill = state.Health.LocalReady ? Success : Warning;
+        UiaStatusText.Text = state.Health.LocalReady ? "Ready" : "执行器未就绪";
         UiaDetailText.Text = state.IsElevated ? "当前客户端为管理员权限" : "普通用户权限（推荐）";
         ComputerPermissionText.Text = state.IsElevated
             ? "管理员权限 · Runtime 通常不需要永久提升"
@@ -223,7 +225,7 @@ public partial class MainWindow : Window
         ComputerPermissionBadge.Background = new SolidColorBrush(ColorFromHex(state.IsElevated ? "#2A2312" : "#113025"));
 
         StartupCheckBox.IsChecked = state.StartupEnabled;
-        StartChatGptButton.IsEnabled = File.Exists(_service.StartChatGptScript) && state.RuntimeAuthCredentialsImported && state.RuntimeTunnelTokenConfigured;
+        StartChatGptButton.IsEnabled = runtimeUsable && File.Exists(_service.StartChatGptScript) && state.RuntimeAuthCredentialsImported && state.RuntimeTunnelTokenConfigured;
         StopChatGptButton.IsEnabled = File.Exists(_service.StopChatGptScript);
         ConnectionActionText.Text = state.RuntimeTunnelTokenConfigured
             ? "公网链路由 Runtime 独立 Cloudflare Tunnel 管理；客户端不会显示或输出任何 secret。"
@@ -378,7 +380,7 @@ public partial class MainWindow : Window
         {
             return Success;
         }
-        if (normalized is "error" or "failed" or "blocked")
+        if (normalized is "error" or "failed" or "blocked" or "repair_required" or "offline")
         {
             return Danger;
         }
@@ -403,9 +405,17 @@ public partial class MainWindow : Window
             "blocked" => "Blocked",
             "failed" => "Failed",
             "error" => "Error",
+            "repair_required" => "需修复安装",
+            "unknown" => "未验证",
+            "unconfigured" => "未配置",
+            "configured" => "已配置，待授权验证",
             _ => status.Trim()
         };
     }
+
+    private static string HealthCheckTime(ConnectionHealth health) => health.CheckedAt is { } time
+        ? $"实测 {time.ToLocalTime():HH:mm:ss}"
+        : "尚无实时检测结果";
 
     private static string JoinNonEmpty(string separator, params string[] values)
     {

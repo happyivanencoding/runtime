@@ -21,7 +21,7 @@ $config = if(Test-Path -LiteralPath $configPath -PathType Leaf){Get-Content -Lit
 $runLevel = if($null -ne $config -and $config.execution_privilege -eq 'administrator'){'Highest'}else{'Limited'}
 $logon = New-ScheduledTaskTrigger -AtLogOn -User $identity
 $periodic = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
-$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel $runLevel
 $reusedExisting = $false
 try {
@@ -39,7 +39,7 @@ try {
     }
     $actionMatches = $null -ne $existing -and $existing.Actions.Count -eq 1 -and [string]$existing.Actions[0].Execute -ieq $powershell -and [string]$existing.Actions[0].Arguments -eq $arguments
     $principalMatches = $null -ne $existing -and [string]$existing.Principal.RunLevel -eq $runLevel -and ([string]$existing.Principal.UserId -eq $identity -or [string]$existing.Principal.UserId -eq $env:USERNAME)
-    $settingsMatch = $null -ne $existing -and -not $existing.Settings.DisallowStartIfOnBatteries -and -not $existing.Settings.StopIfGoingOnBatteries -and [string]$existing.Settings.MultipleInstances -eq 'IgnoreNew'
+    $settingsMatch = $null -ne $existing -and -not $existing.Settings.DisallowStartIfOnBatteries -and -not $existing.Settings.StopIfGoingOnBatteries -and [string]$existing.Settings.MultipleInstances -eq 'IgnoreNew' -and [string]$existing.Settings.ExecutionTimeLimit -eq 'PT5M'
     if (-not ($actionMatches -and $principalMatches -and $settingsMatch -and $hasLogon -and $hasPeriodic)) { throw }
     $reusedExisting = $true
 }

@@ -27,10 +27,11 @@ public sealed record RuntimeState(
     bool RuntimeAuthCredentialsImported,
     bool RuntimeTunnelTokenConfigured,
     bool ImportedAgentDockTunnelTokenAvailable,
-    bool AgentDockRunning,
+    bool AgentDockHealthy,
     bool CodexAvailable,
     bool ClaudeAvailable,
     bool GrokAvailable,
     bool IsElevated,
     bool StartupEnabled,
-    DateTimeOffset RefreshedAt);
+    DateTimeOffset RefreshedAt,
+    ConnectionHealth Health);
