@@ -15,6 +15,8 @@ if ([IO.Path]::GetExtension($source) -ine '.exe') {
 
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
 $target = Join-Path $InstallDir 'Runtime.Control.exe'
+$sourceIcon = Join-Path (Split-Path -Parent $source) 'Runtime.Control.ico'
+$targetIcon = Join-Path $InstallDir 'Runtime.Control.ico'
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 
 $running = Get-Process -Name 'Runtime.Control' -ErrorAction SilentlyContinue | Where-Object {
@@ -27,6 +29,9 @@ if ($running) {
 if ($source -ine $target) {
     Copy-Item -LiteralPath $source -Destination $target -Force
 }
+if (Test-Path -LiteralPath $sourceIcon -PathType Leaf) {
+    Copy-Item -LiteralPath $sourceIcon -Destination $targetIcon -Force
+}
 
 function New-RuntimeShortcut {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -38,6 +43,7 @@ function New-RuntimeShortcut {
         $shortcut.TargetPath = $target
         $shortcut.WorkingDirectory = $InstallDir
         $shortcut.Description = 'Runtime local control center'
+        $shortcut.IconLocation = $(if (Test-Path -LiteralPath $targetIcon -PathType Leaf) { $targetIcon + ',0' } else { $target + ',0' })
         $shortcut.Save()
         if ($RunAsAdministrator) {
             # Shell Link LinkFlags: SLDF_RUNAS_USER (0x2000). Keep other flags intact.

@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Runtime Control"
+        Icon="Assets/runtime-control.ico"
         Width="1120" Height="780" MinWidth="940" MinHeight="650"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" ResizeMode="CanResize"

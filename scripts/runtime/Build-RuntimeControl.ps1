@@ -45,9 +45,16 @@ $binary = Join-Path $OutputDir 'Runtime.Control.exe'
 if (-not (Test-Path -LiteralPath $binary)) {
     throw "Published Runtime Control binary not found: $binary"
 }
+$iconSource = Join-Path $repoRoot 'desktop\windows\runtime-control\Assets\runtime-control.ico'
+$icon = Join-Path $OutputDir 'Runtime.Control.ico'
+if (-not (Test-Path -LiteralPath $iconSource -PathType Leaf)) {
+    throw "Runtime Control icon not found: $iconSource"
+}
+Copy-Item -LiteralPath $iconSource -Destination $icon -Force
 
 [ordered]@{
     binary = $binary
+    icon = $icon
     bytes = (Get-Item -LiteralPath $binary).Length
     target = 'win-x64'
     self_contained = $true
