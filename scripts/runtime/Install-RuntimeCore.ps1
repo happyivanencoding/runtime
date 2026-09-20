@@ -39,6 +39,7 @@ foreach ($name in @(
     'Import-AgentDockCredentials.ps1',
     'Initialize-RuntimePublicConnection.ps1',
     'Set-RuntimeCloudflareToken.ps1',
+    'Set-RuntimeTypeSafeAPIKey.ps1',
     'Set-RuntimePublicTunnelState.ps1',
     'Run-RuntimePublic.ps1',
     'Run-RuntimeCloudflared.ps1',

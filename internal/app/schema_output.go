@@ -301,7 +301,7 @@ func OutputSchema(name string) map[string]any {
 		props["extension_id"] = stringProp("Stable Runtime Chrome Bridge extension id.")
 		props["attached_tabs"] = arrayProp("Chrome tab ids currently attached through chrome.debugger.")
 		props["tabs"] = arrayProp("Chrome tabs visible to the extension status query.")
-	case "browser_act", "browser_snapshot":
+	case "browser_act", "browser_step", "browser_snapshot":
 		props["browser_ok"] = boolProp("Whether the native Go CDP browser operation succeeded.")
 		props["error"] = objectProp("Structured browser error with code, message, phase, and optional details.")
 		props["code"] = stringProp("One of the native browser error codes.")
@@ -328,6 +328,13 @@ func OutputSchema(name string) map[string]any {
 		props["fallback_backend"] = stringProp("Fallback backend identifier; currently windows_uia.")
 		props["browser_error"] = objectProp("Original browser transport error when fallback succeeded.")
 		props["fallback_result"] = objectProp("Native Windows UI Automation result when fallback succeeded.")
+		if name == "browser_step" {
+			props["jev_model"] = stringProp("Concrete TypeSafe Jev model version used for the decision.")
+			props["jev_choice"] = stringProp("Closed-set action candidate selected by Jev.")
+			props["jev_confidence"] = map[string]any{"type": "number", "minimum": 0, "maximum": 1, "description": "Jev confidence for the selected action."}
+			props["selected_action"] = objectProp("Validated Runtime browser action selected by Jev; supplied text/file contents are not echoed.")
+			props["executed"] = boolProp("Whether Runtime executed a browser action; false when Jev selected done.")
+		}
 	case "view_image":
 		props["source"] = objectProp("Resolved artifact, path, or URL source metadata.")
 		props["image"] = objectProp("Processed image metadata attached as standard MCP image content.")

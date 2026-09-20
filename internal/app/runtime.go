@@ -26,6 +26,7 @@ import (
 	toolcommand "github.com/uvwt/agentdock/internal/tool/command"
 	toolcore "github.com/uvwt/agentdock/internal/tool/core"
 	toolfile "github.com/uvwt/agentdock/internal/tool/file"
+	tooljev "github.com/uvwt/agentdock/internal/tool/jev"
 	toolmcp "github.com/uvwt/agentdock/internal/tool/mcp"
 	toolmedia "github.com/uvwt/agentdock/internal/tool/media"
 	toolrecall "github.com/uvwt/agentdock/internal/tool/recall"
@@ -51,6 +52,7 @@ type Runtime struct {
 	dynamicMCP      *toolmcp.Service
 	media           *toolmedia.Service
 	browser         *toolbrowser.Service
+	jev             *tooljev.Client
 	recall          *toolrecall.Service
 	evolution       *evolution.Service
 	taskTools       *tooltask.Service
@@ -97,6 +99,9 @@ func NewRuntime(cfg config.Config) (*Runtime, error) {
 	runtime.dynamicMCP = toolmcp.New(mcpClients, envs)
 	runtime.media = toolmedia.New(cfg, ws, runtime.command.InternalCommandEnv)
 	runtime.browser = toolbrowser.New(toolbrowser.Config{AgentDockHome: cfg.AgentDockHome, ExecutablePath: cfg.BrowserExecutablePath, CDPURL: cfg.BrowserCDPURL, ReuseExistingCDP: cfg.BrowserReuseExistingCDP})
+	if cfg.TypeSafeAPIKey != "" {
+		runtime.jev = tooljev.New(cfg.TypeSafeAPIKey)
+	}
 	runtime.recall = toolrecall.New(func() config.Config { return runtime.cfg })
 	runtime.evolution = evolution.New(func() config.Config { return runtime.cfg }, tasks)
 	runtime.taskTools = tooltask.New(func() config.Config { return runtime.cfg }, tasks, runtime.evolution)

@@ -77,7 +77,12 @@ future control-plane action, separate from model-declared review readiness.
   pointer; extension sessions additionally mark the working Chrome tab with a
   temporary `✦ Runtime` title/favicon and, when it was previously ungrouped, a
   cyan Runtime tab group in the same window. These markers are removed on normal
-  detach and excluded from serialized page semantics. Desktop remains under
+  detach and excluded from serialized page semantics. When `TYPESAFE_API_KEY` is
+  configured, `browser_step` adds a TypeSafe Jev System One policy layer: Runtime
+  snapshots the live page, sends only the goal plus sanitized visible text and
+  interactive-element metadata to Jev, then executes the chosen closed-set action
+  through the same native `browser.Act` CDP/Chrome Bridge path. Screenshots, raw DOM,
+  current input values and Runtime secrets are not sent to Jev. Desktop remains under
   `internal/computer/desktop` for Windows amd64 using native COM UIA and Win32.
   `browser_act.desktop_fallback` is explicit
   and semantic: only an operational browser failure may trigger the supplied UIA

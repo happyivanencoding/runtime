@@ -54,6 +54,7 @@ var outputContractCoverageInventory = map[string]outputContractCoverageEntry{
 	// Browser 成功路径需要真实 Chromium；默认 CI 校验覆盖登记，browser_integration 再执行真实 runtime schema 校验。
 	"browser_session":    {Variants: []string{"start"}, IntegrationOnly: true},
 	"browser_act":        {Variants: []string{"success"}, IntegrationOnly: true},
+	"browser_step":       {Variants: []string{"success"}, IntegrationOnly: true},
 	"browser_snapshot":   {Variants: []string{"success"}, IntegrationOnly: true},
 	"file_publish":       {Variants: []string{"success"}},
 	"project_registry":   {Variants: []string{"register"}},

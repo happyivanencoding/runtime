@@ -330,10 +330,18 @@ function domSnapshotExpression(maxInteractive) {
       is_editable: Boolean(el.isContentEditable || /^(input|textarea|select)$/i.test(el.tagName))
     } : null;
     const candidates = Array.from(document.querySelectorAll('a[href],button,input,textarea,select,[role="button"],[role="link"],[contenteditable="true"],[tabindex]'));
-    const interactive = candidates.filter(visible).slice(0, ${Math.max(1, maxInteractive)}).map(el => ({
-      tag: el.tagName.toLowerCase(), type: el.getAttribute('type') || '', text: norm(el.innerText || el.value || el.textContent).slice(0, 120),
-      aria_name: el.getAttribute('aria-label') || '', href: el.href || '', selector: selectorFor(el)
-    }));
+    const interactive = candidates.filter(visible).slice(0, ${Math.max(1, maxInteractive)}).map(el => {
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      const safeValueText = ['button', 'submit', 'reset'].includes(type) ? String(el.value || '') : '';
+      const editable = Boolean(el.isContentEditable || /^(input|textarea|select)$/i.test(el.tagName)) && !el.disabled && !el.readOnly;
+      return {
+        tag: el.tagName.toLowerCase(), type, name: el.getAttribute('name') || '',
+        text: norm(el.innerText || safeValueText || el.textContent).slice(0, 120),
+        aria_name: el.getAttribute('aria-label') || '', placeholder: el.getAttribute('placeholder') || '', role: el.getAttribute('role') || '',
+        href: el.href || '', selector: selectorFor(el), disabled: Boolean(el.disabled), is_editable: editable,
+        options: el.tagName === 'SELECT' ? Array.from(el.options).slice(0, 40).map(option => ({ value: String(option.value || ''), text: norm(option.textContent).slice(0, 120), disabled: Boolean(option.disabled) })) : []
+      };
+    });
     const doc = document.documentElement; const body = document.body;
     const cleanDOM = () => {
       if (!document.documentElement) return '';

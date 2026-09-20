@@ -35,6 +35,10 @@ $env:AGENTDOCK_OAUTH_ENABLED = 'true'
 $env:AGENTDOCK_SERVER_URL = [string]$public.public_origin
 $env:AGENTDOCK_OAUTH_PASSWORD = Read-RuntimeSecret 'oauth-password.dpapi' 'runtime.oauth.password.v1'
 $env:AGENTDOCK_OAUTH_TOKEN_SECRET = Read-RuntimeSecret 'oauth-token-secret.dpapi' 'runtime.oauth.secret.v1'
+$typesafeSecret = Join-Path $secrets 'typesafe-api-key.dpapi'
+if (Test-Path -LiteralPath $typesafeSecret -PathType Leaf) {
+    $env:TYPESAFE_API_KEY = Read-RuntimeSecret 'typesafe-api-key.dpapi' 'runtime.typesafe.api.v1'
+}
 
 $binary = [string]$install.binary
 if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Runtime binary missing: $binary" }
@@ -48,5 +52,5 @@ finally {
             Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
         }
     } catch {}
-    foreach($key in 'AGENTDOCK_AUTH_TOKEN','AGENTDOCK_OAUTH_PASSWORD','AGENTDOCK_OAUTH_TOKEN_SECRET') { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
+    foreach($key in 'AGENTDOCK_AUTH_TOKEN','AGENTDOCK_OAUTH_PASSWORD','AGENTDOCK_OAUTH_TOKEN_SECRET','TYPESAFE_API_KEY') { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
 }

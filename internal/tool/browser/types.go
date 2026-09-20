@@ -225,13 +225,25 @@ type FocusedElement struct {
 	IsEditable bool   `json:"is_editable,omitempty"`
 }
 
-type InteractiveElement struct {
-	Tag      string `json:"tag"`
-	Type     string `json:"type,omitempty"`
+type SelectOption struct {
+	Value    string `json:"value"`
 	Text     string `json:"text,omitempty"`
-	ARIAName string `json:"aria_name,omitempty"`
-	Href     string `json:"href,omitempty"`
-	Selector string `json:"selector,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+type InteractiveElement struct {
+	Tag         string         `json:"tag"`
+	Type        string         `json:"type,omitempty"`
+	Name        string         `json:"name,omitempty"`
+	Text        string         `json:"text,omitempty"`
+	ARIAName    string         `json:"aria_name,omitempty"`
+	Placeholder string         `json:"placeholder,omitempty"`
+	Role        string         `json:"role,omitempty"`
+	Href        string         `json:"href,omitempty"`
+	Selector    string         `json:"selector,omitempty"`
+	Disabled    bool           `json:"disabled,omitempty"`
+	IsEditable  bool           `json:"is_editable,omitempty"`
+	Options     []SelectOption `json:"options,omitempty"`
 }
 
 type ConsoleError struct {

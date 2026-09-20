@@ -46,6 +46,7 @@ type Config struct {
 	BrowserExecutablePath        string
 	BrowserCDPURL                string
 	BrowserReuseExistingCDP      bool
+	TypeSafeAPIKey               string
 	ACPEnabled                   bool
 	ACPAgentName                 string
 	ACPCommand                   string
@@ -129,6 +130,7 @@ func FromEnv() (Config, error) {
 		BrowserExecutablePath:        os.Getenv("AGENTDOCK_BROWSER_EXECUTABLE_PATH"),
 		BrowserCDPURL:                strings.TrimSpace(os.Getenv("AGENTDOCK_BROWSER_CDP_URL")),
 		BrowserReuseExistingCDP:      browserReuseExistingCDP,
+		TypeSafeAPIKey:               strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")),
 		ACPEnabled:                   acpEnabled,
 		ACPAgentName:                 acpAgentName,
 		ACPCommand:                   acpCommand,
@@ -191,6 +193,7 @@ func (c *Config) Normalize() error {
 		}
 	}
 	c.BrowserCDPURL = strings.TrimSpace(c.BrowserCDPURL)
+	c.TypeSafeAPIKey = strings.TrimSpace(c.TypeSafeAPIKey)
 	if c.BrowserCDPURL != "" {
 		parsed, err := url.Parse(c.BrowserCDPURL)
 		if err != nil || parsed.Host == "" {
