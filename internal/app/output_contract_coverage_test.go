@@ -73,6 +73,7 @@ var outputContractCoverageInventory = map[string]outputContractCoverageEntry{
 	"lsp_query":          {Variants: []string{"hover"}},
 	"desktop_inspect":    {Variants: []string{"windows"}},
 	"desktop_act":        {Variants: []string{"focus"}},
+	"desktop_step":       {Variants: []string{"success"}, IntegrationOnly: true},
 	"desktop_clipboard":  {Variants: []string{"read"}},
 	"desktop_screen":     {Variants: []string{"success"}},
 }
@@ -119,9 +120,11 @@ func outputContractCoverageFindings(definitions []ToolDefinition, inventory map[
 			findings = append(findings, definition.Name+": coverage has no success variants")
 			continue
 		}
-		// 默认 CI 不允许随意把普通工具降级成 integration-only；当前唯一合理例外是需要真实 Chromium 的 Browser 工具。
-		if entry.IntegrationOnly && !strings.HasPrefix(definition.Name, "browser_") {
-			findings = append(findings, definition.Name+": integration-only coverage is only allowed for browser tools")
+		// 默认 CI 不允许随意把普通工具降级成 integration-only。Browser 需要真实 Chromium；
+		// desktop_step 同时需要交互式 Windows UIA 与真实 Jev 服务，因此是唯一的 Desktop 例外。
+		integrationOnlyAllowed := strings.HasPrefix(definition.Name, "browser_") || definition.Name == "desktop_step"
+		if entry.IntegrationOnly && !integrationOnlyAllowed {
+			findings = append(findings, definition.Name+": integration-only coverage is only allowed for browser tools and desktop_step")
 		}
 		findings = append(findings, outputContractVariantFindings(definition.Name, entry.Variants)...)
 	}

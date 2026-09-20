@@ -47,6 +47,13 @@ func nativeInputSchema(name string) (map[string]any, bool) {
 		props["direction"] = enumeration("up", "down", "left", "right")
 		props["amount"] = enumeration("small", "large")
 		required = []string{"action", "window_handle", "selector"}
+	case "desktop_step":
+		props["window_handle"] = map[string]any{"type": "integer", "minimum": 1, "description": "Exact visible window handle from desktop_inspect."}
+		props["goal"] = str("Goal Jev should advance inside this Windows application window.")
+		props["text"] = str("Optional caller-supplied replacement text that Jev may choose to enter through UI Automation ValuePattern. The text itself is not sent to Jev.")
+		props["max_depth"] = integer("Maximum UI Automation tree depth considered by Jev, default 8.", 1, 20)
+		props["max_nodes"] = integer("Maximum UI Automation nodes considered by Jev, default 180.", 1, 1000)
+		required = []string{"window_handle", "goal"}
 	case "desktop_clipboard":
 		props["action"] = enumeration("read", "write")
 		props["text"] = str("Unicode text for an explicitly requested clipboard write.")
@@ -105,6 +112,24 @@ func nativeOutputSchema(name string) (map[string]any, bool) {
 		props["after"] = object()
 		props["observation_note"] = codingString("Post-action observation limitation.")
 		required = []string{"backend", "action", "window_handle", "performed", "before"}
+	case "desktop_step":
+		props["backend"] = codingString("windows-uia+jev.")
+		props["window_handle"] = map[string]any{"type": "integer"}
+		props["window"] = object()
+		props["elements"] = array()
+		props["visited"] = map[string]any{"type": "integer"}
+		props["skipped_elements"] = map[string]any{"type": "integer"}
+		props["truncated"] = map[string]any{"type": "boolean"}
+		props["jev_model"] = codingString("Concrete TypeSafe Jev model version.")
+		props["jev_choice"] = codingString("Closed-set desktop action selected by Jev.")
+		props["jev_confidence"] = map[string]any{"type": "number", "minimum": 0, "maximum": 1}
+		props["jev_policy"] = object()
+		props["selected_action"] = object()
+		props["execution_gate"] = codingString("execute, done, blocked, uncertain, or confirm_required.")
+		props["confirm_required"] = map[string]any{"type": "boolean"}
+		props["executed"] = map[string]any{"type": "boolean"}
+		props["action_result"] = object()
+		required = []string{"backend", "window_handle", "elements", "jev_model", "jev_choice", "execution_gate", "confirm_required", "executed"}
 	case "desktop_clipboard":
 		props["has_text"] = map[string]any{"type": "boolean"}
 		props["text"] = codingString("Clipboard text.")

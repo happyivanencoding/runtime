@@ -81,9 +81,14 @@ future control-plane action, separate from model-declared review readiness.
   configured, `browser_step` adds a TypeSafe Jev System One policy layer: Runtime
   snapshots the live page, sends only the goal plus sanitized visible text and
   interactive-element metadata to Jev, then executes the chosen closed-set action
-  through the same native `browser.Act` CDP/Chrome Bridge path. Screenshots, raw DOM,
-  current input values and Runtime secrets are not sent to Jev. Desktop remains under
-  `internal/computer/desktop` for Windows amd64 using native COM UIA and Win32.
+  through the same native `browser.Act` CDP/Chrome Bridge path. One request also
+  evaluates task completion, action risk, confirmation need and page state; Runtime
+  gates the action before execution. Screenshots, raw DOM, current input values and
+  Runtime secrets are not sent to Jev. `desktop_step` applies the same five-question
+  policy to one explicit Windows UI Automation tree and executes only native UIA
+  actions through `desktop.Act`; it does not send screenshots, control values or use
+  coordinate clicking. Desktop remains under `internal/computer/desktop` for Windows
+  amd64 using native COM UIA and Win32.
   `browser_act.desktop_fallback` is explicit
   and semantic: only an operational browser failure may trigger the supplied UIA
   window/selector/action. CSS is never translated into screen coordinates and there

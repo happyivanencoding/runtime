@@ -19,6 +19,24 @@ type jevBrowserCandidate struct {
 	summary     map[string]any
 }
 
+func jevPolicyExecutionGate(policy tooljev.PolicyResult, hasAction bool) string {
+	if !hasAction || policy.TaskDone >= 0.85 ||
+		(policy.ContextState.Choice == "completed" && policy.ContextState.Confidence >= 0.60) {
+		return "done"
+	}
+	if policy.ContextState.Confidence >= 0.70 &&
+		(policy.ContextState.Choice == "blocked" || policy.ContextState.Choice == "error") {
+		return "blocked"
+	}
+	if policy.NextAction.Confidence < 0.35 {
+		return "uncertain"
+	}
+	if policy.NeedConfirmation >= 0.65 || policy.ActionRisk.Score >= 1.50 {
+		return "confirm_required"
+	}
+	return "execute"
+}
+
 func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result, error) {
 	if err := validateBrowserKeys(args, "session_id", "page_id", "goal", "text", "url", "key", "files", "full_page", "max_text_chars", "max_dom_chars", "max_interactive_elements", "retention_seconds", "close_after", "timeout_ms"); err != nil {
 		return browserFailure(err), nil
@@ -101,21 +119,35 @@ func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result,
 		candidateByID[candidate.id] = candidate
 	}
 
-	decision, err := r.jev.Choose(ctx, tooljev.ChoiceRequest{
-		State:        browserStepJevState(goal, snapshot),
-		Instructions: "Choose exactly one next browser action that best advances the goal from the current page state. Prefer direct task progress over exploration. Choose done only when the goal is already satisfied. The listed actions are the only actions Runtime can execute in this step.",
-		Criteria:     criteria,
+	policy, err := r.jev.Policy(ctx, tooljev.PolicyRequest{
+		State:                    browserStepJevState(goal, snapshot, candidates),
+		ActionCriteria:           criteria,
+		ActionInstructions:       "Choose exactly one next browser action that best advances the goal from the current page state. Prefer direct task progress over exploration. Choose done only when the goal is already satisfied. The listed actions are the only actions Runtime can execute in this step.",
+		DoneInstructions:         "Is the user's browser goal already satisfied in the current page state, so no further browser action is needed?",
+		RiskInstructions:         "Rate the operational risk of executing the best next browser action for the goal from the available action candidates.",
+		ConfirmationInstructions: "Should Runtime require explicit human confirmation before executing the best next browser action because it is sensitive, externally visible, destructive, financial, authorization-related, privacy-sensitive, or otherwise consequential?",
+		ContextStateInstructions: "Classify the current browser page state for deciding what Runtime should do next.",
+		ContextStateCriteria: map[string]string{
+			"ready":     "The page is usable and has enough information for a normal next action",
+			"loading":   "The page is still loading, transitioning, or waiting for content that is likely to appear shortly",
+			"blocked":   "Progress is blocked by login, captcha, permission, modal confirmation, missing user input, or another condition requiring intervention",
+			"error":     "The page is in an error or failed state",
+			"completed": "The user's stated browser goal is visibly satisfied",
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("Jev browser policy: %w", err)
 	}
-	selected, ok := candidateByID[decision.Choice]
+	selected, ok := candidateByID[policy.NextAction.Choice]
 	if !ok {
-		return nil, fmt.Errorf("Jev browser policy returned unknown choice %q", decision.Choice)
+		return nil, fmt.Errorf("Jev browser policy returned unknown choice %q", policy.NextAction.Choice)
 	}
 
+	gate := jevPolicyExecutionGate(policy, selected.action != nil)
+	execute := gate == "execute"
+
 	var result Result
-	if selected.action == nil {
+	if !execute {
 		result, err = r.publishBrowserSnapshot(ctx, snapshot, retention)
 	} else {
 		actionSnapshot, actionErr := r.browser.Act(ctx, toolbrowser.ActRequest{
@@ -130,17 +162,35 @@ func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result,
 	if err != nil {
 		return nil, err
 	}
-	if closeAfter {
+	if closeAfter && (execute || gate == "done") {
 		if _, err := r.browser.CloseSession(toolbrowser.CloseRequest{SessionID: sessionID}); err != nil {
 			return browserFailure(err), nil
 		}
 		result["closed"] = true
 	}
-	result["jev_model"] = decision.Model
-	result["jev_choice"] = decision.Choice
-	result["jev_confidence"] = decision.Confidence
+	result["jev_model"] = policy.Model
+	result["jev_choice"] = policy.NextAction.Choice
+	result["jev_confidence"] = policy.NextAction.Confidence
+	result["jev_policy"] = map[string]any{
+		"next_action": map[string]any{
+			"choice": policy.NextAction.Choice, "confidence": policy.NextAction.Confidence,
+			"probabilities": policy.NextAction.Probabilities,
+		},
+		"task_done": policy.TaskDone,
+		"action_risk": map[string]any{
+			"score": policy.ActionRisk.Score, "confidence": policy.ActionRisk.Confidence,
+			"probabilities": policy.ActionRisk.Probabilities, "legend": policy.ActionRisk.Legend,
+		},
+		"need_confirmation": policy.NeedConfirmation,
+		"page_state": map[string]any{
+			"choice": policy.ContextState.Choice, "confidence": policy.ContextState.Confidence,
+			"probabilities": policy.ContextState.Probabilities,
+		},
+	}
 	result["selected_action"] = selected.summary
-	result["executed"] = selected.action != nil
+	result["execution_gate"] = gate
+	result["confirm_required"] = gate == "confirm_required"
+	result["executed"] = execute
 	return result, nil
 }
 
@@ -251,7 +301,7 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 	return candidates
 }
 
-func browserStepJevState(goal string, snapshot toolbrowser.Snapshot) map[string]any {
+func browserStepJevState(goal string, snapshot toolbrowser.Snapshot, candidates []jevBrowserCandidate) map[string]any {
 	elements := make([]map[string]any, 0, len(snapshot.InteractiveElements))
 	for index, element := range snapshot.InteractiveElements {
 		entry := map[string]any{
@@ -276,8 +326,15 @@ func browserStepJevState(goal string, snapshot toolbrowser.Snapshot) map[string]
 			"is_editable": snapshot.FocusedElement.IsEditable,
 		}
 	}
+	availableActions := make([]map[string]any, 0, len(candidates))
+	for _, candidate := range candidates {
+		availableActions = append(availableActions, map[string]any{
+			"id": candidate.id, "description": candidate.description,
+		})
+	}
 	return map[string]any{
-		"goal": goal,
+		"goal":              goal,
+		"available_actions": availableActions,
 		"page": map[string]any{
 			"url": sanitizeBrowserStepURL(snapshot.URL), "title": snapshot.Title, "visible_text": snapshot.Text,
 			"focused_element": focused, "interactive_elements": elements,

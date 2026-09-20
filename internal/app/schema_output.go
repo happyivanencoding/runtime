@@ -332,8 +332,11 @@ func OutputSchema(name string) map[string]any {
 			props["jev_model"] = stringProp("Concrete TypeSafe Jev model version used for the decision.")
 			props["jev_choice"] = stringProp("Closed-set action candidate selected by Jev.")
 			props["jev_confidence"] = map[string]any{"type": "number", "minimum": 0, "maximum": 1, "description": "Jev confidence for the selected action."}
+			props["jev_policy"] = objectProp("Parallel Jev policy answers: next_action, task_done, action_risk, need_confirmation and page_state.")
 			props["selected_action"] = objectProp("Validated Runtime browser action selected by Jev; supplied text/file contents are not echoed.")
-			props["executed"] = boolProp("Whether Runtime executed a browser action; false when Jev selected done.")
+			props["execution_gate"] = stringProp("execute, done, blocked, uncertain, or confirm_required.")
+			props["confirm_required"] = boolProp("Whether Runtime withheld the selected browser action pending explicit human confirmation.")
+			props["executed"] = boolProp("Whether Runtime executed the selected browser action.")
 		}
 	case "view_image":
 		props["source"] = objectProp("Resolved artifact, path, or URL source metadata.")
