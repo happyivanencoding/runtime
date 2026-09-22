@@ -107,8 +107,8 @@ func TestUIResourcesMatchServedResourceRegistry(t *testing.T) {
 	server := &Server{cfg: config.Config{NexusEndpoint: "https://nexus.example.test", ACPEnabled: true}}
 	definitions := server.appResourceDefinitions()
 	resources := server.UIResources()
-	if len(definitions) != 8 || len(resources) != len(definitions) {
-		t.Fatalf("resource registry=%d bridge capabilities=%d, want 8", len(definitions), len(resources))
+	if len(definitions) != 7 || len(resources) != len(definitions) {
+		t.Fatalf("resource registry=%d bridge capabilities=%d, want 7", len(definitions), len(resources))
 	}
 	byURI := make(map[string]protocol.UIResourceCapability, len(resources))
 	for _, resource := range resources {
@@ -216,13 +216,12 @@ func TestMCPAppsBindResourcesDirectlyToBusinessTools(t *testing.T) {
 		}
 		resources[resource.URI] = resource
 	}
-	if len(resources) != 5 {
-		t.Fatalf("resources/list count = %d, want 5", len(resources))
+	if len(resources) != 4 {
+		t.Fatalf("resources/list count = %d, want 4", len(resources))
 	}
 	for _, uri := range []string{
 		protocol.ContextUIResourceURI,
 		protocol.TaskProgressUIResourceURI,
-		protocol.FileChangeUIResourceURI,
 		protocol.DynamicMCPUIResourceURI,
 		protocol.ArtifactUIResourceURI,
 	} {
@@ -282,39 +281,6 @@ func TestMCPAppsBindResourcesDirectlyToBusinessTools(t *testing.T) {
 		}
 	}
 
-	fileChangeRead, err := harness.session.ReadResource(t.Context(), &mcpsdk.ReadResourceParams{URI: protocol.FileChangeUIResourceURI})
-	if err != nil {
-		t.Fatalf("ReadResource(file change) error = %v", err)
-	}
-	if len(fileChangeRead.Contents) != 1 || !strings.Contains(fileChangeRead.Contents[0].Text, `expectedView="file_change"`) || !strings.Contains(fileChangeRead.Contents[0].Text, "renderFileChange") || strings.Contains(fileChangeRead.Contents[0].Text, "innerHTML") {
-		t.Fatalf("file change resource = %#v", fileChangeRead.Contents)
-	}
-	fileChangeHTML := fileChangeRead.Contents[0].Text
-	for _, marker := range []string{`.waiting-empty{text-align:center}`, `<main><div id="content" class="empty waiting-empty">Waiting for tool output…</div></main>`, `root.classList.remove("empty","waiting-empty")`} {
-		if !strings.Contains(fileChangeHTML, marker) {
-			t.Fatalf("file change resource missing scoped waiting-state marker %q", marker)
-		}
-	}
-	for _, forbidden := range []string{`.empty{text-align:center`, `main{text-align:center`} {
-		if strings.Contains(fileChangeHTML, forbidden) {
-			t.Fatalf("file change resource contains global waiting-state alignment marker %q", forbidden)
-		}
-	}
-	for _, marker := range []string{"@media(max-width:560px){:root{font-size:12px}", ".compact-title{font-size:12px;font-weight:700}", ".compact-summary{font-size:11px", ".compact-path{font-size:10.5px}", ".summary{font-size:11px", ".message-text{font-size:11px", ".context-name{font-size:10.5px;color:#111}", ".context-desc{font-size:9.5px;color:#777}", "@media(max-width:400px){:root{font-size:11.5px}"} {
-		if !strings.Contains(fileChangeHTML, marker) {
-			t.Fatalf("file change resource missing mobile typography marker %q", marker)
-		}
-	}
-	for _, marker := range []string{"body{margin:0;padding:0;background:transparent", ".compact-toggle{width:100%;min-height:68px;border:0", ".compact-toggle.single-line{min-height:44px", ".compact-row", ".compact-path", ".compact-file-row", ".compact-file-stats", ".compact-file-stat.add{color:#52745e}", ".compact-file-stat.del{color:#8a5a55}", `end.append(el("span","brand","Runtime"))`, ".detail-panel{border-top:1px solid #ececec", ".detail-panel[hidden]", `toggle.setAttribute("aria-expanded","false")`, `toggle.classList.add("single-line")`, `toggle.addEventListener("click"`, `compactRows.push(el("span","compact-path",pathText))`, `const detailMeta=el("div","meta")`, `detailMeta.append(el("span","compact-file-stat add",insertions))`, `detailMeta.append(el("span","compact-file-stat del",deletions))`, `stats.append(el("span","compact-file-stat add",insertions))`, `stats.append(el("span","compact-file-stat del",deletions))`, `compactRows.push(fileRow)`, `compactShell({action:data.action||"change",title:fileName},compactRows,fragment)`, ".diff-add{color:#315b45;background:#f5fbf7", ".diff-del{color:#7a3e39;background:#fff7f6", `line.startsWith("--- ")`, `line.startsWith("+++ ")`, `line.startsWith("@@")`, `@media(max-width:560px){`, `.brand,.compact-action{display:none}`, `@media(max-width:400px){`, `.compact-file-state{display:none}`} {
-		if !strings.Contains(fileChangeHTML, marker) {
-			t.Fatalf("file change resource missing simplified UI marker %q", marker)
-		}
-	}
-	for _, nestedFrame := range []string{".compact-toggle{width:100%;min-height:68px;border:1px", ".detail-panel{border:1px"} {
-		if strings.Contains(fileChangeHTML, nestedFrame) {
-			t.Fatalf("file change resource still contains nested app frame marker %q", nestedFrame)
-		}
-	}
 	taskRead, err := harness.session.ReadResource(t.Context(), &mcpsdk.ReadResourceParams{URI: protocol.TaskProgressUIResourceURI})
 	if err != nil {
 		t.Fatalf("ReadResource(task progress) error = %v", err)
@@ -499,8 +465,8 @@ func TestMCPAppsExposeNexusViewsWhenNexusEnabled(t *testing.T) {
 		}
 		resources[resource.URI] = resource
 	}
-	if len(resources) != 7 {
-		t.Fatalf("resources/list count = %d, want 7", len(resources))
+	if len(resources) != 6 {
+		t.Fatalf("resources/list count = %d, want 6", len(resources))
 	}
 	for _, tc := range []struct {
 		uri      string
@@ -540,7 +506,7 @@ func TestReadAppResourceForNexusBridge(t *testing.T) {
 		OAuthServerURL:      "https://dockmini.example.test/",
 	})
 
-	result, err := harness.server.ReadAppResource(protocol.FileChangeUIResourceURI)
+	result, err := harness.server.ReadAppResource(protocol.ArtifactUIResourceURI)
 	if err != nil {
 		t.Fatalf("ReadAppResource() error = %v", err)
 	}
@@ -549,12 +515,12 @@ func TestReadAppResourceForNexusBridge(t *testing.T) {
 		t.Fatalf("ReadAppResource() contents = %#v", result["contents"])
 	}
 	content, ok := contents[0].(map[string]any)
-	if !ok || content["uri"] != protocol.FileChangeUIResourceURI || content["mimeType"] != protocol.MCPAppMIMEType {
+	if !ok || content["uri"] != protocol.ArtifactUIResourceURI || content["mimeType"] != protocol.MCPAppMIMEType {
 		t.Fatalf("ReadAppResource() content = %#v", contents[0])
 	}
 	text, _ := content["text"].(string)
-	if !strings.Contains(text, `expectedView="file_change"`) {
-		t.Fatal("ReadAppResource() missing file change UI marker")
+	if !strings.Contains(text, `expectedView="artifact"`) {
+		t.Fatal("ReadAppResource() missing artifact UI marker")
 	}
 	meta, ok := content["_meta"].(mcpsdk.Meta)
 	if !ok {

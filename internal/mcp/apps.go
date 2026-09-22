@@ -35,13 +35,6 @@ func (s *Server) appResourceDefinitions() []appResourceDefinition {
 			HTML:        mcpAppHTML("task_progress", "Task"),
 		},
 		{
-			URI:         protocol.FileChangeUIResourceURI,
-			Name:        "agentdock-file-change",
-			Title:       "Runtime file change",
-			Description: "Read-only view of the file_edit result, including diff preview and file operation summary.",
-			HTML:        mcpAppHTML("file_change", "File change"),
-		},
-		{
 			URI:         protocol.DynamicMCPUIResourceURI,
 			Name:        "agentdock-dynamic-mcp",
 			Title:       "Runtime dynamic MCP",
