@@ -168,7 +168,9 @@ func TestMCPAppsBindResourcesDirectlyToBusinessTools(t *testing.T) {
 	if contextTool == nil {
 		t.Fatal("tools/list did not expose runtime_context")
 	}
-	assertToolUIResource(t, contextTool, protocol.ContextUIResourceURI)
+	if contextTool.Meta["ui"] != nil {
+		t.Fatalf("runtime_context should stay model-visible without attaching an Apps UI card: %#v", contextTool.Meta)
+	}
 	for _, name := range []string{"file_replace", "file_patch", "file_add", "file_delete", "file_move", "file_edit"} {
 		tool := tools[name]
 		if tool == nil {

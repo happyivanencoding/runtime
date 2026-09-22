@@ -10,7 +10,6 @@ type UIBinding struct {
 }
 
 var toolUIBindings = map[string]UIBinding{
-	"runtime_context":        {ResourceURI: protocol.ContextUIResourceURI},
 	"task_manage":              {ResourceURI: protocol.TaskProgressUIResourceURI},
 	"acp_session":              {ResourceURI: protocol.ACPStatusUIResourceURI},
 	"workflow_template_manage": {ResourceURI: protocol.WorkflowUIResourceURI, Action: "match"},
