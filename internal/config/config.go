@@ -170,6 +170,11 @@ func (c *Config) Normalize() error {
 		if !filepath.IsAbs(cleaned) {
 			return fmt.Errorf("%s must resolve to an absolute path: %s", path.label, cleaned)
 		}
+		_, statErr := os.Stat(cleaned)
+		created := errors.Is(statErr, os.ErrNotExist)
+		if statErr != nil && !created {
+			return fmt.Errorf("stat %s %s: %w", path.label, cleaned, statErr)
+		}
 		if err := os.MkdirAll(cleaned, 0o700); err != nil {
 			return fmt.Errorf("create %s %s: %w", path.label, cleaned, err)
 		}
@@ -180,8 +185,15 @@ func (c *Config) Normalize() error {
 		if !info.IsDir() {
 			return fmt.Errorf("%s is not a directory: %s", path.label, cleaned)
 		}
-		if err := securepath.EnsurePrivate(cleaned); err != nil {
-			return fmt.Errorf("secure %s %s: %w", path.label, cleaned, err)
+		// Windows SetNamedSecurityInfo propagates inheritable ACL changes to existing
+		// descendants. Reapplying the same protected DACL to a large Runtime state
+		// tree on every launch can therefore stall startup for minutes. Harden a
+		// Runtime directory when it is first created; existing homes keep their
+		// already-established ACL instead of being recursively rewritten at boot.
+		if created {
+			if err := securepath.EnsurePrivate(cleaned); err != nil {
+				return fmt.Errorf("secure %s %s: %w", path.label, cleaned, err)
+			}
 		}
 		*path.value = cleaned
 	}
