@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -187,10 +188,10 @@ func (c *Config) Normalize() error {
 		}
 		// Windows SetNamedSecurityInfo propagates inheritable ACL changes to existing
 		// descendants. Reapplying the same protected DACL to a large Runtime state
-		// tree on every launch can therefore stall startup for minutes. Harden a
-		// Runtime directory when it is first created; existing homes keep their
-		// already-established ACL instead of being recursively rewritten at boot.
-		if created {
+		// tree on every launch can therefore stall startup for minutes. Existing
+		// Windows homes keep their established ACL; Unix keeps its cheap chmod-based
+		// startup normalization.
+		if created || runtime.GOOS != "windows" {
 			if err := securepath.EnsurePrivate(cleaned); err != nil {
 				return fmt.Errorf("secure %s %s: %w", path.label, cleaned, err)
 			}
