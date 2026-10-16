@@ -35,6 +35,11 @@ $env:AGENTDOCK_OAUTH_ENABLED = 'true'
 $env:AGENTDOCK_SERVER_URL = [string]$public.public_origin
 $env:AGENTDOCK_OAUTH_PASSWORD = Read-RuntimeSecret 'oauth-password.dpapi' 'runtime.oauth.password.v1'
 $env:AGENTDOCK_OAUTH_TOKEN_SECRET = Read-RuntimeSecret 'oauth-token-secret.dpapi' 'runtime.oauth.secret.v1'
+$uploadSecret = Join-Path $secrets 'upload-token.dpapi'
+if (Test-Path -LiteralPath $uploadSecret -PathType Leaf) {
+    $env:RUNTIME_UPLOAD_TOKEN = Read-RuntimeSecret 'upload-token.dpapi' 'runtime.upload.bearer.v1'
+    $env:RUNTIME_UPLOAD_DIR = if (-not [string]::IsNullOrWhiteSpace([string]$public.upload_dir)) { [string]$public.upload_dir } else { Join-Path (Split-Path -Parent ([string]$install.project_root)) 'incoming' }
+}
 $typesafeSecret = Join-Path $secrets 'typesafe-api-key.dpapi'
 if (Test-Path -LiteralPath $typesafeSecret -PathType Leaf) {
     $env:TYPESAFE_API_KEY = Read-RuntimeSecret 'typesafe-api-key.dpapi' 'runtime.typesafe.api.v1'
@@ -52,5 +57,5 @@ finally {
             Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
         }
     } catch {}
-    foreach($key in 'AGENTDOCK_AUTH_TOKEN','AGENTDOCK_OAUTH_PASSWORD','AGENTDOCK_OAUTH_TOKEN_SECRET','TYPESAFE_API_KEY') { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
+    foreach($key in 'AGENTDOCK_AUTH_TOKEN','AGENTDOCK_OAUTH_PASSWORD','AGENTDOCK_OAUTH_TOKEN_SECRET','TYPESAFE_API_KEY','RUNTIME_UPLOAD_TOKEN') { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
 }

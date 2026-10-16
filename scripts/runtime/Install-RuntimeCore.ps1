@@ -40,6 +40,8 @@ foreach ($name in @(
     'Initialize-RuntimePublicConnection.ps1',
     'Set-RuntimeCloudflareToken.ps1',
     'Set-RuntimeTypeSafeAPIKey.ps1',
+    'Set-RuntimeUploadToken.ps1',
+    'upload_to_runtime.py',
     'Set-RuntimePublicTunnelState.ps1',
     'Run-RuntimePublic.ps1',
     'Run-RuntimeCloudflared.ps1',

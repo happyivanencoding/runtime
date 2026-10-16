@@ -73,6 +73,15 @@ func Serve(ctx context.Context, server *mcp.Server, cfg config.Config) error {
 	mux.HandleFunc("/context", runtimeContextHandler(server, cfg, oauthStore))
 	registerRuntimeAPI(mux, server, cfg, oauthStore)
 	mux.HandleFunc("/mcp", mcpEndpointHandler(server, cfg, oauthStore))
+	if token := os.Getenv("RUNTIME_UPLOAD_TOKEN"); token != "" {
+		root := os.Getenv("RUNTIME_UPLOAD_DIR")
+		if root == "" {
+			root = filepath.Join(cfg.AgentDockHome, "incoming")
+		}
+		receiver := newTransferHandler(root, token)
+		mux.Handle(transferEndpoint, receiver)
+		mux.Handle(transferEndpoint+"/", receiver)
+	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	httpServer := newHTTPServer(addr, loggingMiddleware(mux))
