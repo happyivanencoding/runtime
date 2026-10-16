@@ -9,17 +9,17 @@ Add-Type -AssemblyName System.Security
 
 $source = (Resolve-Path -LiteralPath $KeyFile).Path
 $key = [IO.File]::ReadAllText($source, [Text.Encoding]::UTF8).Trim()
-if ([string]::IsNullOrWhiteSpace($key)) { throw 'TypeSafe API key file is empty.' }
+if ([string]::IsNullOrWhiteSpace($key)) { throw 'StartLux API key file is empty.' }
 
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
 $secretsDir = Join-Path $InstallDir 'secrets'
 New-Item -ItemType Directory -Force $secretsDir | Out-Null
-$target = Join-Path $secretsDir 'typesafe-api-key.dpapi'
+$target = Join-Path $secretsDir 'startlux-api-key.dpapi'
 $plain = [Text.Encoding]::UTF8.GetBytes($key)
 try {
     $protected = [Security.Cryptography.ProtectedData]::Protect(
         $plain,
-        [Text.Encoding]::UTF8.GetBytes('runtime.typesafe.api.v1'),
+        [Text.Encoding]::UTF8.GetBytes('runtime.startlux.api.v1'),
         [Security.Cryptography.DataProtectionScope]::CurrentUser)
     $temp = $target + '.tmp.' + [Guid]::NewGuid().ToString('N')
     try {
@@ -34,4 +34,4 @@ try {
     Remove-Variable key -ErrorAction SilentlyContinue
 }
 
-[ordered]@{ typesafe_api_key = 'configured'; provider = 'dpapi_current_user' } | ConvertTo-Json
+[ordered]@{ startlux_api_key = 'configured'; provider = 'dpapi_current_user' } | ConvertTo-Json

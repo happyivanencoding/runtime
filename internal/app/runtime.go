@@ -26,11 +26,11 @@ import (
 	toolcommand "github.com/uvwt/agentdock/internal/tool/command"
 	toolcore "github.com/uvwt/agentdock/internal/tool/core"
 	toolfile "github.com/uvwt/agentdock/internal/tool/file"
-	tooljev "github.com/uvwt/agentdock/internal/tool/jev"
 	toolmcp "github.com/uvwt/agentdock/internal/tool/mcp"
 	toolmedia "github.com/uvwt/agentdock/internal/tool/media"
 	toolrecall "github.com/uvwt/agentdock/internal/tool/recall"
 	toolskill "github.com/uvwt/agentdock/internal/tool/skill"
+	toolstartlux "github.com/uvwt/agentdock/internal/tool/startlux"
 	tooltask "github.com/uvwt/agentdock/internal/tool/task"
 	"github.com/uvwt/agentdock/internal/workspace"
 )
@@ -52,7 +52,7 @@ type Runtime struct {
 	dynamicMCP      *toolmcp.Service
 	media           *toolmedia.Service
 	browser         *toolbrowser.Service
-	jev             *tooljev.Client
+	startlux        *toolstartlux.Client
 	recall          *toolrecall.Service
 	evolution       *evolution.Service
 	taskTools       *tooltask.Service
@@ -99,8 +99,8 @@ func NewRuntime(cfg config.Config) (*Runtime, error) {
 	runtime.dynamicMCP = toolmcp.New(mcpClients, envs)
 	runtime.media = toolmedia.New(cfg, ws, runtime.command.InternalCommandEnv)
 	runtime.browser = toolbrowser.New(toolbrowser.Config{AgentDockHome: cfg.AgentDockHome, ExecutablePath: cfg.BrowserExecutablePath, CDPURL: cfg.BrowserCDPURL, ReuseExistingCDP: cfg.BrowserReuseExistingCDP})
-	if cfg.TypeSafeAPIKey != "" {
-		runtime.jev = tooljev.New(cfg.TypeSafeAPIKey)
+	if cfg.StartLuxAPIKey != "" {
+		runtime.startlux = toolstartlux.New(cfg.StartLuxAPIKey)
 	}
 	runtime.recall = toolrecall.New(func() config.Config { return runtime.cfg })
 	runtime.evolution = evolution.New(func() config.Config { return runtime.cfg }, tasks)

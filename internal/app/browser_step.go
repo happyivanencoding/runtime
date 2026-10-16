@@ -9,20 +9,23 @@ import (
 	"unicode/utf8"
 
 	toolbrowser "github.com/uvwt/agentdock/internal/tool/browser"
-	tooljev "github.com/uvwt/agentdock/internal/tool/jev"
+	toolstartlux "github.com/uvwt/agentdock/internal/tool/startlux"
 )
 
-type jevBrowserCandidate struct {
+type startluxBrowserCandidate struct {
 	id          string
 	description string
 	action      *toolbrowser.Action
 	summary     map[string]any
 }
 
-func jevPolicyExecutionGate(policy tooljev.PolicyResult, hasAction bool) string {
-	if !hasAction || policy.TaskDone >= 0.85 ||
+func startluxPolicyExecutionGate(policy toolstartlux.PolicyResult, hasAction bool) string {
+	if policy.TaskDone >= 0.85 ||
 		(policy.ContextState.Choice == "completed" && policy.ContextState.Confidence >= 0.60) {
 		return "done"
+	}
+	if !hasAction || (policy.NextAction.NoneProbability != nil && *policy.NextAction.NoneProbability >= 0.20) {
+		return "no_matching_action"
 	}
 	if policy.ContextState.Confidence >= 0.70 &&
 		(policy.ContextState.Choice == "blocked" || policy.ContextState.Choice == "error") {
@@ -41,8 +44,8 @@ func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result,
 	if err := validateBrowserKeys(args, "session_id", "page_id", "goal", "text", "url", "key", "files", "full_page", "max_text_chars", "max_dom_chars", "max_interactive_elements", "retention_seconds", "close_after", "timeout_ms"); err != nil {
 		return browserFailure(err), nil
 	}
-	if r.jev == nil || !r.jev.Configured() {
-		return nil, fmt.Errorf("TypeSafe Jev is not configured for Runtime browser control")
+	if r.startlux == nil || !r.startlux.Configured() {
+		return nil, fmt.Errorf("StartLux 27B is not configured for Runtime browser control")
 	}
 	sessionID, err := requiredString(args, "session_id")
 	if err != nil {
@@ -111,16 +114,16 @@ func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result,
 	if err != nil {
 		return browserFailure(err), nil
 	}
-	candidates := buildJevBrowserCandidates(snapshot, inputText, targetURL, key, files)
+	candidates := buildStartLuxBrowserCandidates(snapshot, inputText, targetURL, key, files)
 	criteria := make(map[string]string, len(candidates))
-	candidateByID := make(map[string]jevBrowserCandidate, len(candidates))
+	candidateByID := make(map[string]startluxBrowserCandidate, len(candidates))
 	for _, candidate := range candidates {
 		criteria[candidate.id] = candidate.description
 		candidateByID[candidate.id] = candidate
 	}
 
-	policy, err := r.jev.Policy(ctx, tooljev.PolicyRequest{
-		State:                    browserStepJevState(goal, snapshot, candidates),
+	policy, err := r.startlux.Policy(ctx, toolstartlux.PolicyRequest{
+		State:                    browserStepStartLuxState(goal, snapshot, candidates),
 		ActionCriteria:           criteria,
 		ActionInstructions:       "Choose exactly one next browser action that best advances the goal from the current page state. Prefer direct task progress over exploration. Choose done only when the goal is already satisfied. The listed actions are the only actions Runtime can execute in this step.",
 		DoneInstructions:         "Is the user's browser goal already satisfied in the current page state, so no further browser action is needed?",
@@ -136,14 +139,14 @@ func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result,
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("Jev browser policy: %w", err)
+		return nil, fmt.Errorf("StartLux browser policy: %w", err)
 	}
 	selected, ok := candidateByID[policy.NextAction.Choice]
-	if !ok {
-		return nil, fmt.Errorf("Jev browser policy returned unknown choice %q", policy.NextAction.Choice)
+	if !ok && strings.TrimSpace(policy.NextAction.Choice) != "" {
+		return nil, fmt.Errorf("StartLux browser policy returned unknown choice %q", policy.NextAction.Choice)
 	}
 
-	gate := jevPolicyExecutionGate(policy, selected.action != nil)
+	gate := startluxPolicyExecutionGate(policy, selected.action != nil)
 	execute := gate == "execute"
 
 	var result Result
@@ -168,13 +171,16 @@ func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result,
 		}
 		result["closed"] = true
 	}
-	result["jev_model"] = policy.Model
-	result["jev_choice"] = policy.NextAction.Choice
-	result["jev_confidence"] = policy.NextAction.Confidence
-	result["jev_policy"] = map[string]any{
+	result["startlux_model"] = policy.Model
+	result["startlux_choice"] = policy.NextAction.Choice
+	result["startlux_confidence"] = policy.NextAction.Confidence
+	if policy.NextAction.NoneProbability != nil {
+		result["startlux_none_probability"] = *policy.NextAction.NoneProbability
+	}
+	result["startlux_policy"] = map[string]any{
 		"next_action": map[string]any{
 			"choice": policy.NextAction.Choice, "confidence": policy.NextAction.Confidence,
-			"probabilities": policy.NextAction.Probabilities,
+			"probabilities": policy.NextAction.Probabilities, "none_probability": policy.NextAction.NoneProbability,
 		},
 		"task_done": policy.TaskDone,
 		"action_risk": map[string]any{
@@ -187,17 +193,21 @@ func (r *Runtime) browserStep(ctx context.Context, args map[string]any) (Result,
 			"probabilities": policy.ContextState.Probabilities,
 		},
 	}
-	result["selected_action"] = selected.summary
+	if selected.summary != nil {
+		result["selected_action"] = selected.summary
+	} else {
+		result["selected_action"] = map[string]any{"action": "none"}
+	}
 	result["execution_gate"] = gate
 	result["confirm_required"] = gate == "confirm_required"
 	result["executed"] = execute
 	return result, nil
 }
 
-func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetURL, key string, files []string) []jevBrowserCandidate {
+func buildStartLuxBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetURL, key string, files []string) []startluxBrowserCandidate {
 	const maxCandidates = 240
-	candidates := make([]jevBrowserCandidate, 0, 64)
-	appendCandidate := func(candidate jevBrowserCandidate) {
+	candidates := make([]startluxBrowserCandidate, 0, 64)
+	appendCandidate := func(candidate startluxBrowserCandidate) {
 		if len(candidates) < maxCandidates-1 {
 			candidates = append(candidates, candidate)
 		}
@@ -211,7 +221,7 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 		label := browserStepElementLabel(element)
 		if strings.ToLower(element.Type) != "file" {
 			action := toolbrowser.Action{Kind: "click", Click: &toolbrowser.ClickAction{Selector: selector}}
-			appendCandidate(jevBrowserCandidate{
+			appendCandidate(startluxBrowserCandidate{
 				id:          fmt.Sprintf("click_%03d", position),
 				description: fmt.Sprintf("Click visible element %d (%s): %s", position, browserStepElementKind(element), label),
 				action:      &action,
@@ -224,7 +234,7 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 			switch {
 			case tag == "textarea" || (tag == "input" && browserStepTextInputType(typeName)):
 				action := toolbrowser.Action{Kind: "fill", Fill: &toolbrowser.FillAction{Selector: selector, Value: inputText}}
-				appendCandidate(jevBrowserCandidate{
+				appendCandidate(startluxBrowserCandidate{
 					id:          fmt.Sprintf("fill_%03d", position),
 					description: fmt.Sprintf("Replace the contents of editable element %d with the caller-supplied text: %s", position, label),
 					action:      &action,
@@ -232,7 +242,7 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 				})
 			case tag != "select" && typeName != "file":
 				action := toolbrowser.Action{Kind: "type", Type: &toolbrowser.TypeAction{Selector: selector, Text: inputText}}
-				appendCandidate(jevBrowserCandidate{
+				appendCandidate(startluxBrowserCandidate{
 					id:          fmt.Sprintf("type_%03d", position),
 					description: fmt.Sprintf("Type the caller-supplied text into editable element %d: %s", position, label),
 					action:      &action,
@@ -255,7 +265,7 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 					optionLabel = option.Value
 				}
 				action := toolbrowser.Action{Kind: "select", Select: &toolbrowser.SelectAction{Selector: selector, Value: option.Value}}
-				appendCandidate(jevBrowserCandidate{
+				appendCandidate(startluxBrowserCandidate{
 					id:          fmt.Sprintf("select_%03d_%02d", position, optionIndex+1),
 					description: fmt.Sprintf("Select option %q in element %d: %s", truncateBrowserStepText(optionLabel, 100), position, label),
 					action:      &action,
@@ -265,7 +275,7 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 		}
 		if len(files) > 0 && strings.EqualFold(element.Tag, "input") && strings.EqualFold(element.Type, "file") {
 			action := toolbrowser.Action{Kind: "upload", Upload: &toolbrowser.UploadAction{Selector: selector, Paths: append([]string(nil), files...)}}
-			appendCandidate(jevBrowserCandidate{
+			appendCandidate(startluxBrowserCandidate{
 				id:          fmt.Sprintf("upload_%03d", position),
 				description: fmt.Sprintf("Upload the caller-supplied file(s) through element %d: %s", position, label),
 				action:      &action,
@@ -275,7 +285,7 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 	}
 	if strings.TrimSpace(targetURL) != "" {
 		action := toolbrowser.Action{Kind: "goto", Goto: &toolbrowser.GotoAction{URL: targetURL, WaitUntil: toolbrowser.WaitLoad}}
-		appendCandidate(jevBrowserCandidate{id: "goto_supplied_url", description: "Navigate to the caller-supplied URL.", action: &action, summary: map[string]any{"action": "goto", "url": targetURL}})
+		appendCandidate(startluxBrowserCandidate{id: "goto_supplied_url", description: "Navigate to the caller-supplied URL.", action: &action, summary: map[string]any{"action": "goto", "url": targetURL}})
 	}
 	if strings.TrimSpace(key) != "" {
 		selector := ""
@@ -283,25 +293,25 @@ func buildJevBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, targetU
 			selector = strings.TrimSpace(snapshot.FocusedElement.Selector)
 		}
 		action := toolbrowser.Action{Kind: "press", Press: &toolbrowser.PressAction{Selector: selector, Key: key}}
-		appendCandidate(jevBrowserCandidate{id: "press_supplied_key", description: "Press the caller-supplied key on the currently focused element.", action: &action, summary: map[string]any{"action": "press", "key": key}})
+		appendCandidate(startluxBrowserCandidate{id: "press_supplied_key", description: "Press the caller-supplied key on the currently focused element.", action: &action, summary: map[string]any{"action": "press", "key": key}})
 	}
 	scrollDown := toolbrowser.Action{Kind: "scroll", Scroll: &toolbrowser.ScrollAction{DeltaY: 720}}
-	appendCandidate(jevBrowserCandidate{id: "scroll_down", description: "Scroll the current page down to reveal later content.", action: &scrollDown, summary: map[string]any{"action": "scroll", "direction": "down"}})
+	appendCandidate(startluxBrowserCandidate{id: "scroll_down", description: "Scroll the current page down to reveal later content.", action: &scrollDown, summary: map[string]any{"action": "scroll", "direction": "down"}})
 	scrollUp := toolbrowser.Action{Kind: "scroll", Scroll: &toolbrowser.ScrollAction{DeltaY: -720}}
-	appendCandidate(jevBrowserCandidate{id: "scroll_up", description: "Scroll the current page up to reveal earlier content.", action: &scrollUp, summary: map[string]any{"action": "scroll", "direction": "up"}})
+	appendCandidate(startluxBrowserCandidate{id: "scroll_up", description: "Scroll the current page up to reveal earlier content.", action: &scrollUp, summary: map[string]any{"action": "scroll", "direction": "up"}})
 	back := toolbrowser.Action{Kind: "back", Navigation: &toolbrowser.NavigationAction{WaitUntil: toolbrowser.WaitLoad}}
-	appendCandidate(jevBrowserCandidate{id: "go_back", description: "Navigate back one entry in browser history.", action: &back, summary: map[string]any{"action": "back"}})
+	appendCandidate(startluxBrowserCandidate{id: "go_back", description: "Navigate back one entry in browser history.", action: &back, summary: map[string]any{"action": "back"}})
 	forward := toolbrowser.Action{Kind: "forward", Navigation: &toolbrowser.NavigationAction{WaitUntil: toolbrowser.WaitLoad}}
-	appendCandidate(jevBrowserCandidate{id: "go_forward", description: "Navigate forward one entry in browser history.", action: &forward, summary: map[string]any{"action": "forward"}})
+	appendCandidate(startluxBrowserCandidate{id: "go_forward", description: "Navigate forward one entry in browser history.", action: &forward, summary: map[string]any{"action": "forward"}})
 	reload := toolbrowser.Action{Kind: "reload", Navigation: &toolbrowser.NavigationAction{WaitUntil: toolbrowser.WaitLoad}}
-	appendCandidate(jevBrowserCandidate{id: "reload_page", description: "Reload the current page.", action: &reload, summary: map[string]any{"action": "reload"}})
+	appendCandidate(startluxBrowserCandidate{id: "reload_page", description: "Reload the current page.", action: &reload, summary: map[string]any{"action": "reload"}})
 	wait := toolbrowser.Action{Kind: "wait", Wait: &toolbrowser.WaitAction{Duration: 500 * time.Millisecond}}
-	appendCandidate(jevBrowserCandidate{id: "wait_500ms", description: "Wait briefly for the page to update or finish loading.", action: &wait, summary: map[string]any{"action": "wait", "milliseconds": 500}})
-	candidates = append(candidates, jevBrowserCandidate{id: "done", description: "Do not execute another browser action because the goal is already satisfied.", summary: map[string]any{"action": "done"}})
+	appendCandidate(startluxBrowserCandidate{id: "wait_500ms", description: "Wait briefly for the page to update or finish loading.", action: &wait, summary: map[string]any{"action": "wait", "milliseconds": 500}})
+	candidates = append(candidates, startluxBrowserCandidate{id: "done", description: "Do not execute another browser action because the goal is already satisfied.", summary: map[string]any{"action": "done"}})
 	return candidates
 }
 
-func browserStepJevState(goal string, snapshot toolbrowser.Snapshot, candidates []jevBrowserCandidate) map[string]any {
+func browserStepStartLuxState(goal string, snapshot toolbrowser.Snapshot, candidates []startluxBrowserCandidate) map[string]any {
 	elements := make([]map[string]any, 0, len(snapshot.InteractiveElements))
 	for index, element := range snapshot.InteractiveElements {
 		entry := map[string]any{

@@ -40,9 +40,9 @@ if (Test-Path -LiteralPath $uploadSecret -PathType Leaf) {
     $env:RUNTIME_UPLOAD_TOKEN = Read-RuntimeSecret 'upload-token.dpapi' 'runtime.upload.bearer.v1'
     $env:RUNTIME_UPLOAD_DIR = if (-not [string]::IsNullOrWhiteSpace([string]$public.upload_dir)) { [string]$public.upload_dir } else { Join-Path (Split-Path -Parent ([string]$install.project_root)) 'incoming' }
 }
-$typesafeSecret = Join-Path $secrets 'typesafe-api-key.dpapi'
-if (Test-Path -LiteralPath $typesafeSecret -PathType Leaf) {
-    $env:TYPESAFE_API_KEY = Read-RuntimeSecret 'typesafe-api-key.dpapi' 'runtime.typesafe.api.v1'
+$startluxSecret = Join-Path $secrets 'startlux-api-key.dpapi'
+if (Test-Path -LiteralPath $startluxSecret -PathType Leaf) {
+    $env:STARTLUX_API_KEY = Read-RuntimeSecret 'startlux-api-key.dpapi' 'runtime.startlux.api.v1'
 }
 
 $binary = [string]$install.binary
@@ -57,5 +57,5 @@ finally {
             Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
         }
     } catch {}
-    foreach($key in 'AGENTDOCK_AUTH_TOKEN','AGENTDOCK_OAUTH_PASSWORD','AGENTDOCK_OAUTH_TOKEN_SECRET','TYPESAFE_API_KEY','RUNTIME_UPLOAD_TOKEN') { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
+    foreach($key in 'AGENTDOCK_AUTH_TOKEN','AGENTDOCK_OAUTH_PASSWORD','AGENTDOCK_OAUTH_TOKEN_SECRET','STARTLUX_API_KEY','RUNTIME_UPLOAD_TOKEN') { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
 }

@@ -26,9 +26,9 @@ $env:AGENTDOCK_ACP_ENABLED = 'false'
 $env:AGENTDOCK_BROWSER_ENABLED = 'true'
 $env:AGENTDOCK_HOST = '127.0.0.1'
 $env:AGENTDOCK_PORT = $Port.ToString()
-$typesafeSecret = Join-Path (Join-Path $installRoot 'secrets') 'typesafe-api-key.dpapi'
-if (Test-Path -LiteralPath $typesafeSecret -PathType Leaf) {
-    $env:TYPESAFE_API_KEY = Read-RuntimeSecret 'typesafe-api-key.dpapi' 'runtime.typesafe.api.v1'
+$startluxSecret = Join-Path (Join-Path $installRoot 'secrets') 'startlux-api-key.dpapi'
+if (Test-Path -LiteralPath $startluxSecret -PathType Leaf) {
+    $env:STARTLUX_API_KEY = Read-RuntimeSecret 'startlux-api-key.dpapi' 'runtime.startlux.api.v1'
 }
 try {
     if ($Transport -eq 'stdio') {
@@ -39,6 +39,6 @@ try {
     }
     $exitCode = $LASTEXITCODE
 } finally {
-    Remove-Item Env:TYPESAFE_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:STARTLUX_API_KEY -ErrorAction SilentlyContinue
 }
 exit $exitCode

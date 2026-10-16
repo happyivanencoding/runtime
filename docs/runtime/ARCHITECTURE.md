@@ -77,15 +77,17 @@ future control-plane action, separate from model-declared review readiness.
   pointer; extension sessions additionally mark the working Chrome tab with a
   temporary `✦ Runtime` title/favicon and, when it was previously ungrouped, a
   cyan Runtime tab group in the same window. These markers are removed on normal
-  detach and excluded from serialized page semantics. When `TYPESAFE_API_KEY` is
-  configured, `browser_step` adds a TypeSafe Jev System One policy layer: Runtime
+  detach and excluded from serialized page semantics. When `STARTLUX_API_KEY` is
+  configured, `browser_step` uses StartLux 27B AutoThink via BambooNode. Runtime
   snapshots the live page, sends only the goal plus sanitized visible text and
-  interactive-element metadata to Jev, then executes the chosen closed-set action
+  interactive-element metadata to StartLux, then executes the chosen closed-set action
   through the same native `browser.Act` CDP/Chrome Bridge path. One request also
   evaluates task completion, action risk, confirmation need and page state; Runtime
-  gates the action before execution. Screenshots, raw DOM, current input values and
-  Runtime secrets are not sent to Jev. `desktop_step` applies the same five-question
-  policy to one explicit Windows UI Automation tree and executes only native UIA
+  gates the action before execution, including handling `none_probability`,
+  nullable choices and confirmation-required actions. Screenshots, raw DOM, current
+  input values and Runtime secrets are not sent to StartLux. `desktop_step`
+  applies the same five-question policy to one explicit Windows UI Automation tree
+  and executes only native UIA
   actions through `desktop.Act`; it does not send screenshots, control values or use
   coordinate clicking. Desktop remains under `internal/computer/desktop` for Windows
   amd64 using native COM UIA and Win32.

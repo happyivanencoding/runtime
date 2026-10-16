@@ -48,7 +48,7 @@ Structured Git, browser, desktop/UIA and ACP tools are likewise first-class Runt
 
 `%LOCALAPPDATA%\RuntimeCore\secrets` is the only Runtime public-edge secret store. Secrets are protected with Windows CurrentUser DPAPI and must never be copied into the JSON state files, source tree, logs, screenshots or UI.
 
-The optional TypeSafe Jev API key used by `browser_step` is stored as `secrets\typesafe-api-key.dpapi`. Configure it from a plaintext key file with `Set-RuntimeTypeSafeAPIKey.ps1 -KeyFile <path>`; Runtime launchers decrypt it only into the child process environment as `TYPESAFE_API_KEY` and remove that environment value when the process exits.
+The StartLux 27B AutoThink API key used by `browser_step` and `desktop_step` is stored as `secrets\startlux-api-key.dpapi`. Configure it from a local key file with `Set-RuntimeStartLuxAPIKey.ps1 -KeyFile <path>`; Runtime launchers decrypt it only into the child process environment as `STARTLUX_API_KEY` and remove that environment value when the process exits. The old TypeSafe key remains unused for rollback.
 
 ## Credential migration from AgentDock
 

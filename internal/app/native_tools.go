@@ -37,9 +37,9 @@ func nativeExecutionToolSpecs() []ToolSpec {
 		}})
 	}
 	tools = append(tools, ToolSpec{
-		Name: "desktop_step", Title: "Jev desktop step",
-		Description: "Use TypeSafe Jev over one explicit Windows UI Automation tree to choose, risk-check, and optionally execute exactly one semantic desktop action. No screenshot or coordinate clicking is used; desktop_act remains the executor for allowed actions.",
-		Annotations: mutatingToolAnnotations(true, true), Availability: requiresJev,
+		Name: "desktop_step", Title: "StartLux 27B desktop step",
+		Description: "Use StartLux 27B AutoThink over one explicit Windows UI Automation tree to choose, risk-check, and optionally execute one semantic desktop action, including a no-matching-action gate. No screenshot or coordinate clicking is used; desktop_act remains the executor.",
+		Annotations: mutatingToolAnnotations(true, true), Availability: requiresStartLux,
 		Handler: ctxToolHandler((*Runtime).desktopStep),
 	})
 	return tools

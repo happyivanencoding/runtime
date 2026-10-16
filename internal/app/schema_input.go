@@ -387,15 +387,15 @@ func InputSchema(name string) map[string]any {
 	case "browser_step":
 		props["session_id"] = stringProp("In-memory browser session id.")
 		props["page_id"] = stringProp("Optional CDP target id. Omit to use the active page.")
-		props["goal"] = stringProp("Goal Jev should advance from the current page state. English is preferred when practical.")
-		props["text"] = stringProp("Optional caller-supplied text that Jev may choose to fill/type into an editable element. Current field values are not sent to Jev.")
-		props["url"] = stringProp("Optional caller-supplied URL that Jev may choose to navigate to.")
-		props["key"] = stringProp("Optional caller-supplied keyboard key that Jev may choose to press on the focused element.")
-		props["files"] = map[string]any{"type": "array", "minItems": 1, "maxItems": 32, "items": map[string]any{"type": "string"}, "description": "Optional caller-supplied local file paths that Jev may choose to upload through a visible file input."}
+		props["goal"] = stringProp("Goal StartLux 27B should advance from the current page state. English is preferred when practical.")
+		props["text"] = stringProp("Optional caller-supplied text that StartLux may choose to fill/type into an editable element. Current field values are not sent to StartLux.")
+		props["url"] = stringProp("Optional caller-supplied URL that StartLux may choose to navigate to.")
+		props["key"] = stringProp("Optional caller-supplied keyboard key that StartLux may choose to press on the focused element.")
+		props["files"] = map[string]any{"type": "array", "minItems": 1, "maxItems": 32, "items": map[string]any{"type": "string"}, "description": "Optional caller-supplied local file paths that StartLux may choose to upload through a visible file input."}
 		props["full_page"] = boolProp("Capture the full page in the returned PNG screenshot.")
 		props["max_text_chars"] = boundedIntProp("Maximum normalized body text characters. Defaults to 6000.", 1, 50000)
 		props["max_dom_chars"] = boundedIntProp("Maximum serialized live DOM characters returned after the step. Defaults to 12000.", 1, 200000)
-		props["max_interactive_elements"] = boundedIntProp("Maximum visible interactive elements considered by Jev. Defaults to 80.", 1, 200)
+		props["max_interactive_elements"] = boundedIntProp("Maximum visible interactive elements considered by StartLux. Defaults to 80.", 1, 200)
 		props["retention_seconds"] = boundedIntProp("Screenshot Artifact retention seconds. Zero uses the Artifact default; capped at 604800.", 0, 604800)
 		props["close_after"] = boolProp("Close the browser session only after the selected step and screenshot Artifact publication succeed.")
 		props["timeout_ms"] = boundedIntProp("Overall step timeout in milliseconds. Defaults to 30000 and is capped at 300000.", 1, 300000)

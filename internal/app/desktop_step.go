@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/uvwt/agentdock/internal/computer/desktop"
-	tooljev "github.com/uvwt/agentdock/internal/tool/jev"
+	toolstartlux "github.com/uvwt/agentdock/internal/tool/startlux"
 )
 
-type jevDesktopCandidate struct {
+type startluxDesktopCandidate struct {
 	id          string
 	description string
 	action      *desktop.Request
@@ -18,8 +18,8 @@ type jevDesktopCandidate struct {
 }
 
 func (r *Runtime) desktopStep(ctx context.Context, args map[string]any) (Result, error) {
-	if r.jev == nil || !r.jev.Configured() {
-		return nil, errors.New("TypeSafe Jev is not configured for Runtime desktop control")
+	if r.startlux == nil || !r.startlux.Configured() {
+		return nil, errors.New("StartLux 27B is not configured for Runtime desktop control")
 	}
 	windowHandle, err := requiredUint64(args, "window_handle")
 	if err != nil {
@@ -45,16 +45,16 @@ func (r *Runtime) desktopStep(ctx context.Context, args map[string]any) (Result,
 	if err != nil {
 		return nil, err
 	}
-	candidates := buildJevDesktopCandidates(windowHandle, nodes, textValue, textSupplied)
+	candidates := buildStartLuxDesktopCandidates(windowHandle, nodes, textValue, textSupplied)
 	criteria := make(map[string]string, len(candidates))
-	candidateByID := make(map[string]jevDesktopCandidate, len(candidates))
+	candidateByID := make(map[string]startluxDesktopCandidate, len(candidates))
 	for _, candidate := range candidates {
 		criteria[candidate.id] = candidate.description
 		candidateByID[candidate.id] = candidate
 	}
 
-	policy, err := r.jev.Policy(ctx, tooljev.PolicyRequest{
-		State:                    desktopStepJevState(goal, window, nodes, candidates),
+	policy, err := r.startlux.Policy(ctx, toolstartlux.PolicyRequest{
+		State:                    desktopStepStartLuxState(goal, window, nodes, candidates),
 		ActionCriteria:           criteria,
 		ActionInstructions:       "Choose exactly one next Windows desktop UI Automation action that best advances the user's goal. Prefer direct task progress. Choose done only when the goal is already satisfied. Choose only from the listed Runtime UIA actions.",
 		DoneInstructions:         "Is the user's desktop goal already satisfied in the current window state, so no further UI Automation action is needed?",
@@ -70,14 +70,14 @@ func (r *Runtime) desktopStep(ctx context.Context, args map[string]any) (Result,
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("Jev desktop policy: %w", err)
+		return nil, fmt.Errorf("StartLux desktop policy: %w", err)
 	}
 	selected, ok := candidateByID[policy.NextAction.Choice]
-	if !ok {
-		return nil, fmt.Errorf("Jev desktop policy returned unknown choice %q", policy.NextAction.Choice)
+	if !ok && strings.TrimSpace(policy.NextAction.Choice) != "" {
+		return nil, fmt.Errorf("StartLux desktop policy returned unknown choice %q", policy.NextAction.Choice)
 	}
 
-	gate := jevPolicyExecutionGate(policy, selected.action != nil)
+	gate := startluxPolicyExecutionGate(policy, selected.action != nil)
 	execute := gate == "execute"
 	var actionResult map[string]any
 	if execute {
@@ -92,20 +92,20 @@ func (r *Runtime) desktopStep(ctx context.Context, args map[string]any) (Result,
 	}
 
 	result := Result{
-		"backend":          "windows-uia+jev",
-		"window_handle":    windowHandle,
-		"window":           window,
-		"elements":         tree["elements"],
-		"visited":          tree["visited"],
-		"skipped_elements": tree["skipped_elements"],
-		"truncated":        tree["truncated"],
-		"jev_model":        policy.Model,
-		"jev_choice":       policy.NextAction.Choice,
-		"jev_confidence":   policy.NextAction.Confidence,
-		"jev_policy": map[string]any{
+		"backend":             "windows-uia+startlux",
+		"window_handle":       windowHandle,
+		"window":              window,
+		"elements":            tree["elements"],
+		"visited":             tree["visited"],
+		"skipped_elements":    tree["skipped_elements"],
+		"truncated":           tree["truncated"],
+		"startlux_model":      policy.Model,
+		"startlux_choice":     policy.NextAction.Choice,
+		"startlux_confidence": policy.NextAction.Confidence,
+		"startlux_policy": map[string]any{
 			"next_action": map[string]any{
 				"choice": policy.NextAction.Choice, "confidence": policy.NextAction.Confidence,
-				"probabilities": policy.NextAction.Probabilities,
+				"probabilities": policy.NextAction.Probabilities, "none_probability": policy.NextAction.NoneProbability,
 			},
 			"task_done": policy.TaskDone,
 			"action_risk": map[string]any{
@@ -118,10 +118,17 @@ func (r *Runtime) desktopStep(ctx context.Context, args map[string]any) (Result,
 				"probabilities": policy.ContextState.Probabilities,
 			},
 		},
-		"selected_action":  selected.summary,
 		"execution_gate":   gate,
 		"confirm_required": gate == "confirm_required",
 		"executed":         execute,
+	}
+	if selected.summary != nil {
+		result["selected_action"] = selected.summary
+	} else {
+		result["selected_action"] = map[string]any{"action": "none"}
+	}
+	if policy.NextAction.NoneProbability != nil {
+		result["startlux_none_probability"] = *policy.NextAction.NoneProbability
 	}
 	if actionResult != nil {
 		result["action_result"] = actionResult
@@ -166,10 +173,10 @@ func (r *Runtime) desktopWindowSummary(ctx context.Context, handle uint64) map[s
 	return map[string]any{"window_handle": handle}
 }
 
-func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text string, textSupplied bool) []jevDesktopCandidate {
+func buildStartLuxDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text string, textSupplied bool) []startluxDesktopCandidate {
 	const maxCandidates = 240
-	candidates := make([]jevDesktopCandidate, 0, 96)
-	appendCandidate := func(candidate jevDesktopCandidate) {
+	candidates := make([]startluxDesktopCandidate, 0, 96)
+	appendCandidate := func(candidate startluxDesktopCandidate) {
 		if len(candidates) < maxCandidates-1 {
 			candidates = append(candidates, candidate)
 		}
@@ -191,7 +198,7 @@ func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text s
 		}
 		if has("invoke") {
 			action := desktop.Request{Action: "press", WindowHandle: windowHandle, Selector: selector}
-			appendCandidate(jevDesktopCandidate{
+			appendCandidate(startluxDesktopCandidate{
 				id:          fmt.Sprintf("press_%03d", position),
 				description: fmt.Sprintf("Invoke control %d (%s): %s", position, node.ControlType, label),
 				action:      &action,
@@ -200,7 +207,7 @@ func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text s
 		}
 		if has("value") && textSupplied {
 			action := desktop.Request{Action: "type", WindowHandle: windowHandle, Selector: selector, Text: text}
-			appendCandidate(jevDesktopCandidate{
+			appendCandidate(startluxDesktopCandidate{
 				id:          fmt.Sprintf("type_%03d", position),
 				description: fmt.Sprintf("Replace the value of control %d (%s) with caller-supplied text: %s", position, node.ControlType, label),
 				action:      &action,
@@ -209,7 +216,7 @@ func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text s
 		}
 		if has("toggle") {
 			action := desktop.Request{Action: "toggle", WindowHandle: windowHandle, Selector: selector}
-			appendCandidate(jevDesktopCandidate{
+			appendCandidate(startluxDesktopCandidate{
 				id:          fmt.Sprintf("toggle_%03d", position),
 				description: fmt.Sprintf("Toggle control %d (%s): %s", position, node.ControlType, label),
 				action:      &action,
@@ -218,7 +225,7 @@ func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text s
 		}
 		if has("selection_item") {
 			action := desktop.Request{Action: "select", WindowHandle: windowHandle, Selector: selector}
-			appendCandidate(jevDesktopCandidate{
+			appendCandidate(startluxDesktopCandidate{
 				id:          fmt.Sprintf("select_%03d", position),
 				description: fmt.Sprintf("Select control %d (%s): %s", position, node.ControlType, label),
 				action:      &action,
@@ -228,7 +235,7 @@ func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text s
 		if has("scroll") {
 			for _, direction := range []string{"down", "up"} {
 				action := desktop.Request{Action: "scroll", WindowHandle: windowHandle, Selector: selector, Direction: direction, Amount: "small"}
-				appendCandidate(jevDesktopCandidate{
+				appendCandidate(startluxDesktopCandidate{
 					id:          fmt.Sprintf("scroll_%s_%03d", direction, position),
 					description: fmt.Sprintf("Scroll %s within control %d (%s): %s", direction, position, node.ControlType, label),
 					action:      &action,
@@ -238,7 +245,7 @@ func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text s
 		}
 		if node.ControlType == "edit" || node.ControlType == "combobox" {
 			action := desktop.Request{Action: "focus", WindowHandle: windowHandle, Selector: selector}
-			appendCandidate(jevDesktopCandidate{
+			appendCandidate(startluxDesktopCandidate{
 				id:          fmt.Sprintf("focus_%03d", position),
 				description: fmt.Sprintf("Focus control %d (%s): %s", position, node.ControlType, label),
 				action:      &action,
@@ -246,14 +253,14 @@ func buildJevDesktopCandidates(windowHandle uint64, nodes []desktop.Node, text s
 			})
 		}
 	}
-	candidates = append(candidates, jevDesktopCandidate{
+	candidates = append(candidates, startluxDesktopCandidate{
 		id: "done", description: "Do not execute another desktop action because the goal is already satisfied.",
 		summary: map[string]any{"action": "done"},
 	})
 	return candidates
 }
 
-func desktopStepJevState(goal string, window map[string]any, nodes []desktop.Node, candidates []jevDesktopCandidate) map[string]any {
+func desktopStepStartLuxState(goal string, window map[string]any, nodes []desktop.Node, candidates []startluxDesktopCandidate) map[string]any {
 	elements := make([]map[string]any, 0, len(nodes))
 	for index, node := range nodes {
 		entry := map[string]any{
