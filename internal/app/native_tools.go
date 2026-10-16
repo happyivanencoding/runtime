@@ -42,6 +42,12 @@ func nativeExecutionToolSpecs() []ToolSpec {
 		Annotations: mutatingToolAnnotations(true, true), Availability: requiresStartLux,
 		Handler: ctxToolHandler((*Runtime).desktopStep),
 	})
+	tools = append(tools, ToolSpec{
+		Name: "desktop_run", Title: "Multi-step StartLux desktop run",
+		Description: "Run bounded native Windows UI Automation steps in one MCP call: observe the explicit window, get one StartLux 27B decision, invoke only validated UIA actions, and repeat. Stops for confirmation, risk, blocked state, missing action, no progress, cancellation, or limits. Does not use coordinates, screenshots, or global desktop locking between steps.",
+		Annotations: mutatingToolAnnotations(true, true), Availability: requiresStartLux,
+		Handler: ctxToolHandler((*Runtime).desktopRun),
+	})
 	return tools
 }
 

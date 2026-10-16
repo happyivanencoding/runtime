@@ -91,6 +91,18 @@ future control-plane action, separate from model-declared review readiness.
   actions through `desktop.Act`; it does not send screenshots, control values or use
   coordinate clicking. Desktop remains under `internal/computer/desktop` for Windows
   amd64 using native COM UIA and Win32.
+
+  `browser_run` and `desktop_run` add an opt-in bounded Computer-domain loop on
+  top of the existing `browser_step` and `desktop_step` handlers. One MCP request
+  may perform several observe / StartLux / validated action / reobserve cycles
+  using the same browser session or explicit desktop HWND. The run defaults to
+  eight decisions / 60 seconds (maximum 16 / 85 seconds), stops on model-declared
+  completion, missing candidate, blocked or uncertain state, human confirmation,
+  repeated stagnant actions, error, timeout, or cancellation. It never silently
+  approves a dangerous action or expands to coordinate clicks. Only the final
+  screenshot/UIA state and compact per-step trace return to the caller. Single-step
+  tools remain available. No new Agent loop, Task Store, global desktop lock,
+  background worker, or changes to General / Coding / MCP / ACP are introduced.
   `browser_act.desktop_fallback` is explicit
   and semantic: only an operational browser failure may trigger the supplied UIA
   window/selector/action. CSS is never translated into screen coordinates and there

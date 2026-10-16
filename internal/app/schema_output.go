@@ -339,6 +339,22 @@ func OutputSchema(name string) map[string]any {
 			props["confirm_required"] = boolProp("Whether Runtime withheld the selected browser action pending explicit human confirmation.")
 			props["executed"] = boolProp("Whether Runtime executed the selected browser action.")
 		}
+	case "browser_run":
+		props["domain"] = stringProp("Computer execution domain: browser.")
+		props["session_id"] = stringProp("Existing Runtime browser session id.")
+		props["status"] = stringProp("completed, stopped or failed.")
+		props["stop_reason"] = stringProp("model_done, max_steps, max_duration, confirm_required, uncertain, blocked, no_matching_action, no_progress, cancelled or error.")
+		props["completion_source"] = stringProp("startlux_policy when StartLux declares the user goal complete, not an independent external assertion.")
+		props["max_steps"] = intProp("Bounded decision step limit.")
+		props["max_duration_ms"] = intProp("Overall requested run deadline in milliseconds.")
+		props["steps_observed"] = intProp("Number of model decisions evaluated.")
+		props["steps_executed"] = intProp("Number of native browser actions executed.")
+		props["elapsed_ms"] = intProp("Server-side elapsed time including all steps.")
+		props["steps"] = arrayProp("Compact decision and action trace, no repeated DOM or screenshots.")
+		props["last_result"] = objectProp("Final browser_step observation, including one final screenshot Artifact.")
+		props["startlux_model"] = stringProp("Concrete StartLux decision model.")
+		props["error"] = objectProp("Structured browser backend error, when applicable.")
+		required = []string{"domain", "session_id", "status", "stop_reason", "max_steps", "max_duration_ms", "steps_observed", "steps_executed", "elapsed_ms", "steps"}
 	case "view_image":
 		props["source"] = objectProp("Resolved artifact, path, or URL source metadata.")
 		props["image"] = objectProp("Processed image metadata attached as standard MCP image content.")

@@ -31,6 +31,14 @@ ChatGPT 网页版已有 AgentDock 连接
 Desktop 操作先调用 desktop_inspect 获取当前 window_handle 和真实语义元素，再
 调用 desktop_act；操作系统 runtime_id 不能跨窗口重建后长期缓存。
 
+若 Computer 需要连续操作且有 StartLux 27B API 配置，可以在已存在的
+browser_session 上使用 browser_run，或从 desktop_inspect 取得当前窗口句柄后使用
+desktop_run。两者复用原来的单步执行层，在一次 MCP 请求中至多决策 8 步（可调 1..16），
+默认总计 60 秒（最高 85 秒）。遇到确认、风险、无合适动作、阻塞或重复无进展会停止，
+返回紧凑的 steps 轨迹以及 last_result；status=completed 仅代表 StartLux 判断已完成，
+不是独立的业务验收。简单且确定的操作仍可使用 browser_act / desktop_act，
+所有既有文件、命令、Git、ACP 和 Coding 工具不受此功能影响。
+
 ## 从源码重新构建与安装
 
 先禁用自己的 `runtime-core-preview`，不要停止官方 AgentDock 或其他 MCP。

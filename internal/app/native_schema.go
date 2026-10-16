@@ -47,12 +47,16 @@ func nativeInputSchema(name string) (map[string]any, bool) {
 		props["direction"] = enumeration("up", "down", "left", "right")
 		props["amount"] = enumeration("small", "large")
 		required = []string{"action", "window_handle", "selector"}
-	case "desktop_step":
+	case "desktop_step", "desktop_run":
 		props["window_handle"] = map[string]any{"type": "integer", "minimum": 1, "description": "Exact visible window handle from desktop_inspect."}
 		props["goal"] = str("Goal StartLux should advance inside this Windows application window.")
 		props["text"] = str("Optional caller-supplied replacement text that StartLux may choose to enter through UI Automation ValuePattern. The text itself is not sent to StartLux.")
 		props["max_depth"] = integer("Maximum UI Automation tree depth considered by StartLux, default 8.", 1, 20)
 		props["max_nodes"] = integer("Maximum UI Automation nodes considered by StartLux, default 180.", 1, 1000)
+		if name == "desktop_run" {
+			props["max_steps"] = integer("Maximum bounded StartLux UIA decisions. Defaults to 8; maximum 16.", 1, 16)
+			props["max_duration_ms"] = integer("Overall desktop-run deadline in milliseconds. Defaults to 60000; maximum 85000.", 1000, 85000)
+		}
 		required = []string{"window_handle", "goal"}
 	case "desktop_clipboard":
 		props["action"] = enumeration("read", "write")
@@ -131,6 +135,20 @@ func nativeOutputSchema(name string) (map[string]any, bool) {
 		props["executed"] = map[string]any{"type": "boolean"}
 		props["action_result"] = object()
 		required = []string{"backend", "window_handle", "elements", "startlux_model", "startlux_choice", "execution_gate", "confirm_required", "executed"}
+	case "desktop_run":
+		props["domain"] = codingString("Computer execution domain: desktop.")
+		props["window_handle"] = map[string]any{"type": "integer"}
+		props["status"] = codingString("completed, stopped or failed.")
+		props["stop_reason"] = codingString("Reason the bounded UIA run stopped.")
+		props["completion_source"] = codingString("startlux_policy when the model declares the goal complete.")
+		for _, key := range []string{"max_steps", "max_duration_ms", "steps_observed", "steps_executed", "elapsed_ms"} {
+			props[key] = map[string]any{"type": "integer"}
+		}
+		props["steps"] = array()
+		props["last_result"] = object()
+		props["startlux_model"] = codingString("Concrete StartLux model.")
+		props["error"] = codingString("Error message if the run failed.")
+		required = []string{"domain", "window_handle", "status", "stop_reason", "max_steps", "max_duration_ms", "steps_observed", "steps_executed", "elapsed_ms", "steps"}
 	case "desktop_clipboard":
 		props["has_text"] = map[string]any{"type": "boolean"}
 		props["text"] = codingString("Clipboard text.")

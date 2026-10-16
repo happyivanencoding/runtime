@@ -55,6 +55,7 @@ var outputContractCoverageInventory = map[string]outputContractCoverageEntry{
 	"browser_session":    {Variants: []string{"start"}, IntegrationOnly: true},
 	"browser_act":        {Variants: []string{"success"}, IntegrationOnly: true},
 	"browser_step":       {Variants: []string{"success"}, IntegrationOnly: true},
+	"browser_run":        {Variants: []string{"success"}, IntegrationOnly: true},
 	"browser_snapshot":   {Variants: []string{"success"}, IntegrationOnly: true},
 	"file_publish":       {Variants: []string{"success"}},
 	"project_registry":   {Variants: []string{"register"}},
@@ -74,6 +75,7 @@ var outputContractCoverageInventory = map[string]outputContractCoverageEntry{
 	"desktop_inspect":    {Variants: []string{"windows"}},
 	"desktop_act":        {Variants: []string{"focus"}},
 	"desktop_step":       {Variants: []string{"success"}, IntegrationOnly: true},
+	"desktop_run":        {Variants: []string{"success"}, IntegrationOnly: true},
 	"desktop_clipboard":  {Variants: []string{"read"}},
 	"desktop_screen":     {Variants: []string{"success"}},
 }
@@ -122,7 +124,7 @@ func outputContractCoverageFindings(definitions []ToolDefinition, inventory map[
 		}
 		// 默认 CI 不允许随意把普通工具降级成 integration-only。Browser 需要真实 Chromium；
 		// desktop_step 同时需要交互式 Windows UIA 与真实 StartLux 决策服务，因此是唯一的 Desktop 例外。
-		integrationOnlyAllowed := strings.HasPrefix(definition.Name, "browser_") || definition.Name == "desktop_step"
+		integrationOnlyAllowed := strings.HasPrefix(definition.Name, "browser_") || (definition.Name == "desktop_step" || definition.Name == "desktop_run")
 		if entry.IntegrationOnly && !integrationOnlyAllowed {
 			findings = append(findings, definition.Name+": integration-only coverage is only allowed for browser tools and desktop_step")
 		}

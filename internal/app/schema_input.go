@@ -384,7 +384,7 @@ func InputSchema(name string) map[string]any {
 		props["close_after"] = boolProp("Close the session only after all actions, final snapshot, and screenshot Artifact publication succeed.")
 		props["timeout_ms"] = boundedIntProp("Overall operation timeout in milliseconds. Defaults to 30000 and is capped at 300000.", 1, 300000)
 		required = []string{"session_id", "actions"}
-	case "browser_step":
+	case "browser_step", "browser_run":
 		props["session_id"] = stringProp("In-memory browser session id.")
 		props["page_id"] = stringProp("Optional CDP target id. Omit to use the active page.")
 		props["goal"] = stringProp("Goal StartLux 27B should advance from the current page state. English is preferred when practical.")
@@ -399,6 +399,12 @@ func InputSchema(name string) map[string]any {
 		props["retention_seconds"] = boundedIntProp("Screenshot Artifact retention seconds. Zero uses the Artifact default; capped at 604800.", 0, 604800)
 		props["close_after"] = boolProp("Close the browser session only after the selected step and screenshot Artifact publication succeed.")
 		props["timeout_ms"] = boundedIntProp("Overall step timeout in milliseconds. Defaults to 30000 and is capped at 300000.", 1, 300000)
+		if name == "browser_run" {
+			delete(props, "close_after")
+			props["max_steps"] = boundedIntProp("Maximum StartLux decision steps in this one Runtime call. Default 8, maximum 16.", 1, 16)
+			props["max_duration_ms"] = boundedIntProp("Overall runtime deadline for this bounded execution. Defaults to 60000 milliseconds, maximum 85000.", 1000, 85000)
+			props["timeout_ms"] = boundedIntProp("Optional timeout for each browser step; bounded by remaining run time. Defaults to 30000.", 1, 300000)
+		}
 		required = []string{"session_id", "goal"}
 	case "browser_snapshot":
 		props["session_id"] = stringProp("In-memory browser session id.")
@@ -437,7 +443,7 @@ func InputSchema(name string) map[string]any {
 		}
 	}
 	switch name {
-	case "list_dir", "exec_command", "acp_start", "acp_resume", "acp_status", "acp_stop", "acp_session", "acp_prompt", "acp_interaction", "mcp_manage", "mcp_tool_search", "mcp_tool_inspect", "mcp_tool_call", "browser_session", "browser_act", "browser_step", "browser_snapshot":
+	case "list_dir", "exec_command", "acp_start", "acp_resume", "acp_status", "acp_stop", "acp_session", "acp_prompt", "acp_interaction", "mcp_manage", "mcp_tool_search", "mcp_tool_inspect", "mcp_tool_call", "browser_session", "browser_act", "browser_step", "browser_run", "browser_snapshot":
 		// 这些工具的参数契约需要严格收敛，避免删除或拼错的字段被静默忽略。
 		schema["additionalProperties"] = false
 	}
