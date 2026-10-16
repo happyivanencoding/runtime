@@ -15,7 +15,7 @@ import urllib.request
 
 
 def request(base, token, method, path, payload=None, headers=None):
-    h = {"Authorization": "Bearer " + token}
+    h = {"Authorization": "Bearer " + token, "User-Agent": "RuntimeTransfer/1.0"}
     if headers:
         h.update(headers)
     req = urllib.request.Request(base + path, data=payload, headers=h, method=method)

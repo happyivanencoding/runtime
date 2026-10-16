@@ -52,6 +52,7 @@ python upload_to_runtime.py /path/to/project.zip --url https://runtime.thegreatn
 ## 故障定位
 
 - `401`：上传 token 未提供、错误或过期（轮换）；不能用 ChatGPT MCP OAuth 登录代替。
+- Cloudflare `403 / 1010`：默认 `Python-urllib/...` 客户端签名可能被拦截；仓库提供的上传脚本使用明确的 `RuntimeTransfer/1.0` 客户端标识，已在公网实测通过。
 - `404`：Runtime 没有载入上传令牌、新版本未运行或路径错误。
 - `409`：偏移量失配/上传未完成，云端客户端会获取 offset 重试。
 - `413`：单块超出 4 MiB。
