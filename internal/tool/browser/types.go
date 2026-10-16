@@ -229,6 +229,7 @@ type SelectOption struct {
 	Value    string `json:"value"`
 	Text     string `json:"text,omitempty"`
 	Disabled bool   `json:"disabled,omitempty"`
+	Selected bool   `json:"selected,omitempty"`
 }
 
 type InteractiveElement struct {

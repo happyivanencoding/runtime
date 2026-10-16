@@ -339,7 +339,7 @@ function domSnapshotExpression(maxInteractive) {
         text: norm(el.innerText || safeValueText || el.textContent).slice(0, 120),
         aria_name: el.getAttribute('aria-label') || '', placeholder: el.getAttribute('placeholder') || '', role: el.getAttribute('role') || '',
         href: el.href || '', selector: selectorFor(el), disabled: Boolean(el.disabled), is_editable: editable,
-        options: el.tagName === 'SELECT' ? Array.from(el.options).slice(0, 40).map(option => ({ value: String(option.value || ''), text: norm(option.textContent).slice(0, 120), disabled: Boolean(option.disabled) })) : []
+        options: el.tagName === 'SELECT' ? Array.from(el.options).slice(0, 40).map(option => ({ value: String(option.value || ''), text: norm(option.textContent).slice(0, 120), disabled: Boolean(option.disabled), selected: Boolean(option.selected) })) : []
       };
     });
     const doc = document.documentElement; const body = document.body;

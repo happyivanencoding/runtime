@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	toolbrowser "github.com/uvwt/agentdock/internal/tool/browser"
 )
 
 func exampleComputerResult(domain, gate, action, choice, state string) Result {
@@ -198,5 +200,37 @@ func TestComputerRunPublishedSchemasAndSuccessResults(t *testing.T) {
 			}
 			assertToolResultMatchesOutputSchema(t, tc.tool, out)
 		})
+	}
+}
+
+func TestBrowserStepExposesSelectedOptionAndSkipsReselect(t *testing.T) {
+	snapshot := toolbrowser.Snapshot{
+		InteractiveElements: []toolbrowser.InteractiveElement{{
+			Tag: "select", Selector: "#team", ARIAName: "Team",
+			Options: []toolbrowser.SelectOption{
+				{Value: "Risk", Text: "Risk", Selected: true},
+				{Value: "Equity", Text: "Equity"},
+			},
+		}},
+	}
+	candidates := buildStartLuxBrowserCandidates(snapshot, "", "", "", nil)
+	foundRisk, foundEquity := false, false
+	for _, candidate := range candidates {
+		if candidate.id == "select_001_01" {
+			foundRisk = true
+		}
+		if candidate.id == "select_001_02" {
+			foundEquity = true
+		}
+	}
+	if foundRisk || !foundEquity {
+		t.Fatalf("candidate list must exclude the currently selected option")
+	}
+	state := browserStepStartLuxState("Choose Equity", snapshot, candidates)
+	page := state["page"].(map[string]any)
+	elems := page["interactive_elements"].([]map[string]any)
+	options := elems[0]["options"].([]map[string]any)
+	if options[0]["selected"] != true || options[1]["selected"] != false {
+		t.Fatalf("selected state missing from model input: %+v", options)
 	}
 }

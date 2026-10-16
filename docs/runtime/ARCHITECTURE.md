@@ -85,7 +85,9 @@ future control-plane action, separate from model-declared review readiness.
   evaluates task completion, action risk, confirmation need and page state; Runtime
   gates the action before execution, including handling `none_probability`,
   nullable choices and confirmation-required actions. Screenshots, raw DOM, current
-  input values and Runtime secrets are not sent to StartLux. `desktop_step`
+  text input values and Runtime secrets are not sent to StartLux. The selected
+  state of a dropdown option is included to prevent repeated no-op selections.
+  `desktop_step`
   applies the same five-question policy to one explicit Windows UI Automation tree
   and executes only native UIA
   actions through `desktop.Act`; it does not send screenshots, control values or use

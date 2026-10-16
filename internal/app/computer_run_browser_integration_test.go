@@ -86,3 +86,47 @@ func TestBrowserIntegrationComputerRunUsesNativeCDP(t *testing.T) {
 	}
 	assertToolResultMatchesOutputSchema(t, "browser_run", result)
 }
+
+func TestBrowserIntegrationSelectOptionReportsCurrentSelection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, `<title>Select status</title><h1>Select status</h1>
+        <select id="team"><option value="Risk" selected>Risk</option><option value="Equity">Equity</option></select>`)
+	}))
+	defer server.Close()
+	rt, _ := appBrowserIntegrationRuntime(t)
+	defer rt.Close()
+	sessionID := startRuntimeBrowser(t, rt, server.URL)
+	read := func() []toolbrowser.SelectOption {
+		t.Helper()
+		snapshot, err := rt.browser.Snapshot(context.Background(), toolbrowser.SnapshotRequest{
+			SessionID: sessionID, Timeout: 5 * time.Second,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, el := range snapshot.InteractiveElements {
+			if el.Selector == "#team" {
+				return el.Options
+			}
+		}
+		t.Fatal("select element not found")
+		return nil
+	}
+	opts := read()
+	if len(opts) != 2 || !opts[0].Selected || opts[1].Selected {
+		t.Fatalf("initial select state missing: %+v", opts)
+	}
+	_, err := rt.browser.Act(context.Background(), toolbrowser.ActRequest{
+		SessionID: sessionID,
+		Actions:   []toolbrowser.Action{{Kind: "select", Select: &toolbrowser.SelectAction{Selector: "#team", Value: "Equity"}}},
+		Timeout:   5 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts = read()
+	if opts[0].Selected || !opts[1].Selected {
+		t.Fatalf("updated select state missing: %+v", opts)
+	}
+}

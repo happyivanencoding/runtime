@@ -257,8 +257,8 @@ func buildStartLuxBrowserCandidates(snapshot toolbrowser.Snapshot, inputText, ta
 			}
 			for optionIndex := 0; optionIndex < optionLimit; optionIndex++ {
 				option := element.Options[optionIndex]
-				if option.Disabled {
-					continue
+				if option.Disabled || option.Selected {
+					continue // Re-selecting the active option cannot advance the task.
 				}
 				optionLabel := strings.TrimSpace(option.Text)
 				if optionLabel == "" {
@@ -322,7 +322,7 @@ func browserStepStartLuxState(goal string, snapshot toolbrowser.Snapshot, candid
 		if len(element.Options) > 0 {
 			options := make([]map[string]any, 0, len(element.Options))
 			for _, option := range element.Options {
-				options = append(options, map[string]any{"text": option.Text, "value": option.Value, "disabled": option.Disabled})
+				options = append(options, map[string]any{"text": option.Text, "value": option.Value, "disabled": option.Disabled, "selected": option.Selected})
 			}
 			entry["options"] = options
 		}
