@@ -98,6 +98,10 @@ Windows 构建需要 .NET 8 SDK：
 不需要管理员权限，也不会默认加入开机启动。用户可在客户端“日志与设置”页自行开启
 “登录 Windows 后启动到托盘”。
 
+客户端在同一个 Windows 会话中只运行一个实例。重复启动不会创建第二个控制面板；
+普通启动会请求恢复已有窗口，`--tray` 启动则保持静默。独立的 Runtime Core、
+Chrome Bridge 进程不受该限制。
+
 Runtime Control 把公网网络层与 ChatGPT App 层分开读取：
 
 ```text

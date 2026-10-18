@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly Forms.NotifyIcon _trayIcon;
     private RuntimeState? _state;
     private bool _exitRequested;
+    private bool _activationRequested;
     private bool _refreshing;
 
     private static readonly Brush Success = new SolidColorBrush(ColorFromHex("#4ED8A0"));
@@ -50,7 +51,7 @@ public partial class MainWindow : Window
             await RefreshAsync(silent: false);
             RefreshLogs();
             _refreshTimer.Start();
-            if (Environment.GetCommandLineArgs().Any(arg => string.Equals(arg, "--tray", StringComparison.OrdinalIgnoreCase)))
+            if (!_activationRequested && Environment.GetCommandLineArgs().Any(arg => string.Equals(arg, "--tray", StringComparison.OrdinalIgnoreCase)))
             {
                 Hide();
             }
@@ -76,11 +77,11 @@ public partial class MainWindow : Window
         return menu;
     }
 
-    private void RestoreFromTray()
+    internal void RestoreFromTray()
     {
         Dispatcher.Invoke(() =>
         {
-            Show();
+            _activationRequested = true;
             if (WindowState == WindowState.Minimized)
             {
                 WindowState = WindowState.Normal;
