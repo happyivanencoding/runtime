@@ -61,6 +61,7 @@ jobs:
             agentdock_linux_${{ matrix.goarch }}.tar.gz
             agentdock_linux_${{ matrix.goarch }}.tar.gz.sha256
           if-no-files-found: error
+          retention-days: 7
 
   build-macos:
     name: Build macOS ${{ matrix.goarch }}
@@ -107,6 +108,7 @@ jobs:
             agentdock_darwin_${{ matrix.goarch }}.tar.gz
             agentdock_darwin_${{ matrix.goarch }}.tar.gz.sha256
           if-no-files-found: error
+          retention-days: 7
 
   build-macos-app:
     name: Build macOS offline DMG
@@ -190,6 +192,7 @@ jobs:
             dist/macos-app/AgentDock-macos-universal.zip
             dist/macos-app/AgentDock-macos-universal.zip.sha256
           if-no-files-found: error
+          retention-days: 7
 
   build-windows:
     name: Build Windows ${{ matrix.goarch }}
@@ -314,6 +317,7 @@ jobs:
             agentdock_windows_${{ matrix.goarch }}.zip
             agentdock_windows_${{ matrix.goarch }}.zip.sha256
           if-no-files-found: error
+          retention-days: 7
 
   build-windows-setup:
     name: Build signed Windows offline Setup ${{ matrix.goarch }}
@@ -387,6 +391,7 @@ jobs:
           name: agentdock-windows-setup-${{ matrix.goarch }}
           path: dist/AgentDockSetup-${{ matrix.goarch }}.exe
           if-no-files-found: error
+          retention-days: 7
 
   publish:
     name: Publish GitHub Release
